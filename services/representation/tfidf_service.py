@@ -15,20 +15,22 @@ from sklearn.metrics.pairwise import cosine_similarity
 import joblib
 import os
 import uvicorn
+from collections import defaultdict, Counter
+import math
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-TEXT_CLEANING_SERVICE_URL = "http://localhost:8001"
+TEXT_CLEANING_SERVICE_URL = "http://localhost:8005"  # Using dedicated TF-IDF text cleaning service
 TFIDF_MODEL_PATH = "/tmp/tfidf_model.joblib"
 TFIDF_VECTORS_PATH = "/tmp/tfidf_vectors.joblib"
 
 # Pre-trained Antique model paths (update these paths after training)
-ANTIQUE_MODEL_PATH = "/tmp/antique_enhanced_tfidf_vectorizer.joblib"
-ANTIQUE_MATRIX_PATH = "/tmp/antique_enhanced_tfidf_matrix.joblib"
-ANTIQUE_METADATA_PATH = "/tmp/antique_enhanced_document_metadata.joblib"
+ANTIQUE_MODEL_PATH = "/tmp/tfidf_vectorizer.joblib"
+ANTIQUE_MATRIX_PATH = "/tmp/atfidf_matrix.joblib"
+ANTIQUE_METADATA_PATH = "/tmp/document_metadata.joblib"
 USE_PRETRAINED_ANTIQUE = True  # Set to True to use pre-trained Antique model
 
 # Request/Response Models
@@ -73,6 +75,13 @@ class TFIDFService:
         self.is_trained = False
         self.using_pretrained = False
         
+        # Inverted index for efficient search
+        self.inverted_index = defaultdict(list)  # term -> [(doc_idx, tf_score), ...]
+        self.term_frequencies = defaultdict(dict)  # term -> {doc_idx: tf}
+        self.document_frequencies = defaultdict(int)  # term -> df
+        self.vocabulary = set()
+        self.collection_stats = {}
+        
         # HTTP client for calling text cleaning service
         self.http_client = httpx.AsyncClient(timeout=30.0)
         
@@ -83,22 +92,17 @@ class TFIDFService:
             self._load_model()
     
     async def clean_text(self, text: str) -> str:
-        """Clean text using the shared text cleaning service"""
+        """Clean text using the custom text cleaning service"""
         try:
             response = await self.http_client.post(
                 f"{TEXT_CLEANING_SERVICE_URL}/clean",
-                json={
-                    "text": text,
-                    "remove_stopwords": True,
-                    "apply_stemming": True,
-                    "apply_lemmatization": False
-                }
+                json={"text": text}
             )
             response.raise_for_status()
             result = response.json()
             return result["cleaned_text"]
         except httpx.RequestError as e:
-            logger.error(f"Error connecting to text cleaning service: {e}")
+            logger.error(f"Error connecting to custom text cleaning service: {e}")
             # Fallback to basic cleaning
             return self._basic_fallback_clean(text)
         except Exception as e:
@@ -144,6 +148,9 @@ class TFIDFService:
         # Fit and transform documents
         self.tfidf_matrix = self.vectorizer.fit_transform(cleaned_texts)
         self.is_trained = True
+        
+        # Build inverted index after TF-IDF training
+        self._build_inverted_index(cleaned_texts)
         
         # Save model
         self._save_model()
@@ -287,6 +294,174 @@ class TFIDFService:
             "matrix_shape": self.tfidf_matrix.shape if self.tfidf_matrix is not None else None
         }
     
+    def _build_inverted_index(self, cleaned_texts: List[str]):
+        """Build inverted index from cleaned documents"""
+        logger.info("Building inverted index...")
+        
+        # Get vocabulary from TF-IDF vectorizer
+        feature_names = self.vectorizer.get_feature_names_out()
+        self.vocabulary = set(feature_names)
+        
+        # Convert TF-IDF matrix to dense for easier manipulation
+        dense_matrix = self.tfidf_matrix.toarray()
+        
+        # Build inverted index
+        for doc_idx, doc_vector in enumerate(dense_matrix):
+            # Get non-zero terms for this document
+            non_zero_indices = np.nonzero(doc_vector)[0]
+            
+            for term_idx in non_zero_indices:
+                term = feature_names[term_idx]
+                tf_idf_score = doc_vector[term_idx]
+                
+                # Add to inverted index
+                self.inverted_index[term].append((doc_idx, tf_idf_score))
+                
+                # Calculate pure TF (term frequency)
+                # For TF-IDF, we need to reverse-engineer TF from the TF-IDF score
+                # TF-IDF = TF * IDF, so TF = TF-IDF / IDF
+                # But for simplicity, we'll use the TF-IDF score directly
+                self.term_frequencies[term][doc_idx] = tf_idf_score
+        
+        # Calculate document frequencies
+        for term in self.vocabulary:
+            self.document_frequencies[term] = len(self.inverted_index[term])
+        
+        # Calculate collection statistics
+        self.collection_stats = {
+            "total_documents": len(cleaned_texts),
+            "vocabulary_size": len(self.vocabulary),
+            "average_terms_per_doc": np.mean([len(text.split()) for text in cleaned_texts]),
+            "total_terms": sum(len(text.split()) for text in cleaned_texts)
+        }
+        
+        logger.info(f"Inverted index built: {len(self.vocabulary)} terms, {len(cleaned_texts)} documents")
+    
+    def search_with_inverted_index(self, query_terms: List[str], top_k: int = 10) -> List[Tuple[str, float]]:
+        """Search using inverted index for faster retrieval"""
+        if not self.inverted_index:
+            raise ValueError("Inverted index not built. Please rebuild the index.")
+        
+        # Calculate document scores using inverted index
+        doc_scores = defaultdict(float)
+        
+        for term in query_terms:
+            if term in self.inverted_index:
+                # Get documents containing this term
+                for doc_idx, tf_idf_score in self.inverted_index[term]:
+                    doc_scores[doc_idx] += tf_idf_score
+        
+        # Sort documents by score
+        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+        
+        # Return top-k results
+        results = []
+        for doc_idx, score in sorted_docs[:top_k]:
+            doc_id = self.document_order[doc_idx]
+            results.append((doc_id, score))
+        
+        return results
+    
+async def search_with_inverted_index(self, query: str, top_k: int = 10) -> SearchResponse:
+        """Hybrid search using both TF-IDF cosine similarity and inverted index"""
+        start_time = asyncio.get_event_loop().time()
+        
+        if not self.is_trained:
+            raise ValueError("TF-IDF model not trained. Please index documents first.")
+        
+# Clean query
+        cleaned_query = await self.clean_text(query)
+        query_terms = cleaned_query.split()
+
+        # Call the inverted index service
+        try:
+            response = await self.http_client.post(
+                "http://localhost:8006/query_index",
+                json={"terms": query_terms, "top_k": top_k * 2}
+            )
+            response.raise_for_status()
+            candidate_results = response.json()["results"]
+        except Exception as e:
+            logger.error(f"Error contacting inverted index service: {e}")
+            candidate_results = []
+
+        refined_results = []
+        if candidate_results:
+            # Refine with cosine similarity
+            query_vector = self.vectorizer.transform([cleaned_query])
+            
+            for doc_id, inverted_score in candidate_results:
+                doc_idx = self.document_order.index(doc_id)
+                doc_vector = self.tfidf_matrix[doc_idx:doc_idx+1]
+                cosine_sim = cosine_similarity(query_vector, doc_vector)[0][0]
+                refined_results.append((doc_id, cosine_sim))
+
+            # Rank based on cosine similarity
+            refined_results.sort(key=lambda x: x[1], reverse=True)
+            final_results = refined_results[:top_k]
+        else:
+            final_results = []
+                    refined_results.append((doc_id, combined_score))
+                
+                # Sort by combined score
+                refined_results.sort(key=lambda x: x[1], reverse=True)
+                final_results = refined_results[:top_k]
+            else:
+                final_results = []
+        else:
+            # Fallback to regular TF-IDF search
+            regular_search = await self.search(query, top_k)
+            final_results = [(result.document_id, result.score) for result in regular_search.results]
+        
+        # Build response
+        results = []
+        for doc_id, score in final_results:
+            if score > 0:
+                doc = self.documents[doc_id]
+                results.append(SearchResult(
+                    document_id=doc_id,
+                    score=float(score),
+                    text=doc.text,
+                    metadata=doc.metadata or {}
+                ))
+        
+        processing_time = asyncio.get_event_loop().time() - start_time
+        
+        return SearchResponse(
+            query=query,
+            results=results,
+            total_results=len(results),
+            processing_time=processing_time
+        )
+    
+    def get_term_statistics(self, term: str) -> Dict[str, Any]:
+        """Get statistics for a specific term"""
+        if term not in self.vocabulary:
+            return {"error": f"Term '{term}' not in vocabulary"}
+        
+        return {
+            "term": term,
+            "document_frequency": self.document_frequencies[term],
+            "total_documents": len(self.documents),
+            "idf": math.log(len(self.documents) / (1 + self.document_frequencies[term])),
+            "documents_containing_term": len(self.inverted_index[term]),
+            "average_tf_idf": np.mean([score for _, score in self.inverted_index[term]]) if self.inverted_index[term] else 0
+        }
+    
+    def get_document_terms(self, doc_id: str, top_terms: int = 10) -> List[Tuple[str, float]]:
+        """Get top terms for a specific document"""
+        if doc_id not in self.documents:
+            return []
+        
+        doc_idx = self.document_order.index(doc_id)
+        doc_vector = self.tfidf_matrix[doc_idx].toarray().flatten()
+        feature_names = self.vectorizer.get_feature_names_out()
+        
+        # Get top terms by TF-IDF score
+        top_indices = np.argsort(doc_vector)[::-1][:top_terms]
+        
+        return [(feature_names[idx], doc_vector[idx]) for idx in top_indices if doc_vector[idx] > 0]
+    
     async def close(self):
         """Close HTTP client"""
         await self.http_client.aclose()
@@ -361,6 +536,35 @@ async def search_documents(request: SearchRequest):
     except Exception as e:
         logger.error(f"Error searching documents: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
+
+@app.post("/search/hybrid", response_model=SearchResponse)
+async def search_hybrid(request: SearchRequest):
+    """Hybrid search using both TF-IDF and inverted index"""
+    try:
+        result = await tfidf_service.search_hybrid(request.query, request.top_k, use_inverted_index=True)
+        return result
+    except Exception as e:
+        logger.error(f"Error in hybrid search: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Hybrid search error: {str(e)}")
+
+@app.get("/term/{term}/stats")
+async def get_term_stats(term: str):
+    """Get statistics for a specific term"""
+    try:
+        return tfidf_service.get_term_statistics(term)
+    except Exception as e:
+        logger.error(f"Error getting term stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Term stats error: {str(e)}")
+
+@app.get("/document/{doc_id}/terms")
+async def get_document_terms(doc_id: str, top_terms: int = 10):
+    """Get top terms for a specific document"""
+    try:
+        terms = tfidf_service.get_document_terms(doc_id, top_terms)
+        return {"document_id": doc_id, "top_terms": terms}
+    except Exception as e:
+        logger.error(f"Error getting document terms: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Document terms error: {str(e)}")
 
 if __name__ == "__main__":
     # This service runs on port 8002

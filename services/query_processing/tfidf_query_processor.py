@@ -17,25 +17,31 @@ import joblib
 import os
 import uvicorn
 
+# Import EnhancedTokenizer to enable model loading
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from services.shared.enhanced_tokenizer import EnhancedTokenizer
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-ENHANCED_CLEANING_SERVICE_URL = "http://localhost:8003"
+ENHANCED_CLEANING_SERVICE_URL = "http://localhost:8005"
 MODEL_BASE_PATH = "/Users/raafatmhanna/Desktop/custom-search-engine/backend/models"
 
 # Pre-trained model paths
-TFIDF_VECTORIZER_PATH = f"{MODEL_BASE_PATH}/antique_corrected_tfidf_vectorizer.joblib"
-TFIDF_MATRIX_PATH = f"{MODEL_BASE_PATH}/antique_corrected_tfidf_matrix.joblib"
-DOCUMENT_METADATA_PATH = f"{MODEL_BASE_PATH}/antique_corrected_document_metadata.joblib"
+TFIDF_VECTORIZER_PATH = f"{MODEL_BASE_PATH}/tfidf_vectorizer.joblib"
+TFIDF_MATRIX_PATH = f"{MODEL_BASE_PATH}/tfidf_matrix.joblib"
+DOCUMENT_METADATA_PATH = f"{MODEL_BASE_PATH}/document_metadata.joblib"
 
 # Request/Response Models
 class QueryRequest(BaseModel):
     query: str
     top_k: int = 10
     use_enhanced_cleaning: bool = True
-    # similarity_threshold removed - will be auto-calculated
+    similarity_threshold: float = 0.0  # Default to 0.0 to get all results
 
 class DocumentResult(BaseModel):
     doc_id: str
@@ -185,27 +191,15 @@ class TFIDFQueryProcessor:
         # Transform query to TF-IDF vector
         query_vector = self.vectorizer.transform([cleaned_query])
         
-        # Calculate cosine similarities
+        # Calculate cosine similarities between query vector and ALL document vectors
         similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
         
-        # Auto-calculate similarity threshold as mean of similarities
-        calculated_threshold = np.mean(similarities)
-        valid_indices = np.where(similarities > calculated_threshold)[0]
-        valid_similarities = similarities[valid_indices]
+        # Get top-k results (no threshold filtering - just get the best k results)
+        top_k = min(request.top_k, len(similarities))
         
-        if len(valid_similarities) == 0:
-            return QueryResponse(
-                query=request.query,
-                cleaned_query=cleaned_query,
-                results=[],
-                total_results=0,
-                processing_time_ms=(time.time() - start_time) * 1000,
-                similarity_stats={"min": 0, "max": 0, "mean": 0, "std": 0}
-            )
-        
-        # Get top-k results
-        top_k = min(request.top_k, len(valid_similarities))
-        top_indices = valid_indices[np.argsort(valid_similarities)[::-1][:top_k]]
+        # Get indices of top-k documents sorted by similarity score (descending)
+        top_indices = np.argsort(similarities)[::-1][:top_k]
+        top_similarities = similarities[top_indices]
         
         # Build results
         results = []
@@ -234,10 +228,10 @@ class TFIDFQueryProcessor:
         
         # Calculate similarity statistics
         similarity_stats = {
-            "min": float(np.min(valid_similarities)),
-            "max": float(np.max(valid_similarities)),
-            "mean": float(np.mean(valid_similarities)),
-            "std": float(np.std(valid_similarities))
+            "min": float(np.min(top_similarities)),
+            "max": float(np.max(top_similarities)),
+            "mean": float(np.mean(top_similarities)),
+            "std": float(np.std(top_similarities))
         }
         
         processing_time_ms = (time.time() - start_time) * 1000

@@ -66,9 +66,9 @@ def copy_local_files(source_dir: str, filenames: list):
 def verify_model_files():
     """Verify that all required model files exist and are valid"""
     required_files = [
-        "antique_enhanced_tfidf_vectorizer.joblib",
-        "antique_enhanced_tfidf_matrix.joblib", 
-        "antique_enhanced_document_metadata.joblib"
+        "tfidf_vectorizer.joblib",
+        "tfidf_matrix.joblib", 
+        "document_metadata.joblib"
     ]
     
     print("🔍 Verifying model files...")
@@ -114,11 +114,11 @@ def update_service_configuration():
         lines = updated_content.split('\n')
         for i, line in enumerate(lines):
             if 'ANTIQUE_MODEL_PATH' in line:
-                lines[i] = f'ANTIQUE_MODEL_PATH = "{MODEL_DIRECTORY}/antique_enhanced_tfidf_vectorizer.joblib"'
+                lines[i] = f'ANTIQUE_MODEL_PATH = "{MODEL_DIRECTORY}/tfidf_vectorizer.joblib"'
             elif 'ANTIQUE_MATRIX_PATH' in line:
-                lines[i] = f'ANTIQUE_MATRIX_PATH = "{MODEL_DIRECTORY}/antique_enhanced_tfidf_matrix.joblib"'
+                lines[i] = f'ANTIQUE_MATRIX_PATH = "{MODEL_DIRECTORY}/tfidf_matrix.joblib"'
             elif 'ANTIQUE_METADATA_PATH' in line:
-                lines[i] = f'ANTIQUE_METADATA_PATH = "{MODEL_DIRECTORY}/antique_enhanced_document_metadata.joblib"'
+                lines[i] = f'ANTIQUE_METADATA_PATH = "{MODEL_DIRECTORY}/document_metadata.joblib"'
         
         updated_content = '\n'.join(lines)
         
@@ -185,9 +185,9 @@ def main():
     
     # Option 1: Look for models in current directory (downloaded from Colab)
     model_files = [
-        "antique_enhanced_tfidf_vectorizer.joblib",
-        "antique_enhanced_tfidf_matrix.joblib",
-        "antique_enhanced_document_metadata.joblib"
+        "tfidf_vectorizer.joblib",
+        "tfidf_matrix.joblib",
+        "document_metadata.joblib"
     ]
     
     print("\n📂 Looking for model files in current directory...")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-TF-IDF Services Orchestrator
-Starts all TF-IDF related services in the correct order
+Quora TF-IDF Services Orchestrator
+Starts all Quora TF-IDF related services in the correct order
 """
 
 import subprocess
@@ -15,20 +15,20 @@ from pathlib import Path
 # Service configuration
 SERVICES = [
     {
-        "name": "TF-IDF Text Cleaning Service",
-        "script": "services/shared/tfidf_text_cleaning_service.py",
-        "port": 8005,
+        "name": "Quora Dataset Loading Service",
+        "script": "services/data/quora_loader_service.py",
+        "port": 8004,
         "startup_delay": 2
     },
     {
-        "name": "TF-IDF Representation Service", 
-        "script": "services/representation/tfidf_service.py",
-        "port": 8002,
+        "name": "TF-IDF Quora Representation Service", 
+        "script": "services/representation/tfidf_quora_service.py",
+        "port": 8006,
         "startup_delay": 3
     }
 ]
 
-class ServiceOrchestrator:
+class QuoraServiceOrchestrator:
     def __init__(self):
         self.processes = []
         self.base_dir = Path(__file__).parent
@@ -44,7 +44,6 @@ class ServiceOrchestrator:
             ("scikit-learn", "sklearn"),
             ("numpy", "numpy"),
             ("joblib", "joblib"),
-            ("nltk", "nltk"),
             ("pydantic", "pydantic")
         ]
         
@@ -64,29 +63,32 @@ class ServiceOrchestrator:
         return True
     
     def check_models(self):
-        """Check if TF-IDF models exist"""
-        print("🔍 Checking TF-IDF models...")
+        """Check if Quora TF-IDF models exist"""
+        print("🔍 Checking Quora TF-IDF models...")
         
         model_dir = self.base_dir / "models"
         required_models = [
-            "antique_corrected_tfidf_vectorizer.joblib",
-            "antique_corrected_tfidf_matrix.joblib", 
-            "antique_corrected_document_metadata.joblib"
+            "quora_tfidf_vectorizer.joblib",
+            "quora_tfidf_matrix.joblib", 
+            "quora_document_metadata.joblib"
         ]
         
         missing_models = []
         for model in required_models:
             model_path = model_dir / model
             if not model_path.exists():
-                missing_models.append(model)
+                # Also check in /tmp directory
+                tmp_path = Path("/tmp") / model
+                if not tmp_path.exists():
+                    missing_models.append(model)
         
         if missing_models:
-            print(f"❌ Missing TF-IDF models: {', '.join(missing_models)}")
-            print("Please ensure models are trained and saved in the 'models' directory")
-            print("You can use the corrected_tfidf_training.py script to train models")
+            print(f"❌ Missing Quora TF-IDF models: {', '.join(missing_models)}")
+            print("Please ensure models are trained and saved in the 'models' directory or /tmp")
+            print("You can use the tfidf_quora_colab.ipynb notebook to train models")
             return False
         
-        print("✅ All TF-IDF models found")
+        print("✅ All Quora TF-IDF models found")
         return True
     
     def start_service(self, service_config):
@@ -138,7 +140,7 @@ class ServiceOrchestrator:
     
     def start_all_services(self):
         """Start all services in order"""
-        print("🎯 Starting TF-IDF Services...")
+        print("🎯 Starting Quora TF-IDF Services...")
         print("=" * 60)
         
         # Check dependencies and models first
@@ -146,7 +148,8 @@ class ServiceOrchestrator:
             return False
             
         if not self.check_models():
-            return False
+            print("\n⚠️  WARNING: Models not found, but continuing...")
+            print("Services will start but may not function correctly until models are available.")
         
         print("\n🚀 Starting services...")
         
@@ -170,7 +173,7 @@ class ServiceOrchestrator:
     def show_status(self):
         """Show status of all services"""
         print("\n" + "=" * 60)
-        print("🎉 ALL SERVICES STARTED SUCCESSFULLY!")
+        print("🎉 ALL QUORA TF-IDF SERVICES STARTED SUCCESSFULLY!")
         print("=" * 60)
         
         for service in self.processes:
@@ -179,19 +182,19 @@ class ServiceOrchestrator:
         print(f"""
 📋 Quick Test Commands:
 
-1. TEST ENHANCED CLEANING:
-   curl -X POST http://localhost:8003/clean \\
+1. LOAD QUORA DATASET:
+   curl -X POST http://localhost:8004/load \\
      -H "Content-Type: application/json" \\
-     -d '{{"text": "information retrieval systems"}}'
+     -d '{{"data_path": "/path/to/quora/dataset.csv", "max_documents": 1000}}'
 
-2. TEST QUERY PROCESSING:
-   curl -X POST http://localhost:8004/search \\
+2. SEARCH QUORA DOCUMENTS:
+   curl -X POST http://localhost:8006/search \\
      -H "Content-Type: application/json" \\
-     -d '{{"query": "information retrieval", "top_k": 5}}'
+     -d '{{"query": "machine learning", "top_k": 5}}'
 
 3. CHECK SERVICE STATUS:
-   curl http://localhost:8003/health
-   curl http://localhost:8004/status
+   curl http://localhost:8004/health
+   curl http://localhost:8006/status
 
 🛑 To stop all services: Press Ctrl+C
 """)
@@ -240,9 +243,9 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    orchestrator = ServiceOrchestrator()
+    orchestrator = QuoraServiceOrchestrator()
     
-    print("🎯 TF-IDF Services Orchestrator")
+    print("🎯 Quora TF-IDF Services Orchestrator")
     print("=" * 60)
     
     if orchestrator.start_all_services():

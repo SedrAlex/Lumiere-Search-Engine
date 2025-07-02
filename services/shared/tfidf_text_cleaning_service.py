@@ -32,9 +32,12 @@ try:
                 nltk.data.find(f'corpora/{download}')
             else:
                 nltk.data.find(f'corpora/{download}')
-        except LookupError:
-            logger.info(f"Downloading NLTK data: {download}")
-            nltk.download(download, quiet=True)
+        except (LookupError, FileNotFoundError, Exception) as e:
+            logger.info(f"Downloading NLTK data: {download} (Error: {e})")
+            try:
+                nltk.download(download, quiet=True)
+            except Exception as download_error:
+                logger.warning(f"Failed to download {download}: {download_error}")
     
     NLTK_AVAILABLE = True
     logger.info("NLTK components initialized successfully for TF-IDF cleaning")

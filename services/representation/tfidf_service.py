@@ -18,6 +18,53 @@ import uvicorn
 from collections import defaultdict, Counter
 import math
 
+# Import enhanced tokenizer
+try:
+    from services.shared.enhanced_tokenizer import EnhancedTokenizer
+except ImportError:
+    # Fallback definition if import fails
+    import re
+    from nltk.stem import WordNetLemmatizer, PorterStemmer
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    import nltk
+    
+    class EnhancedTokenizer:
+        """Fallback enhanced tokenizer"""
+        def __init__(self, use_spellcheck=True):
+            self.lemmatizer = WordNetLemmatizer()
+            self.stemmer = PorterStemmer()
+            self.stop_words = set(stopwords.words('english'))
+            self.use_spellcheck = use_spellcheck
+            self.spell_checker = None
+
+        def __call__(self, text: str) -> List[str]:
+            """Tokenization pipeline: Lemmatization THEN Stemming"""
+            if not text:
+                return []
+
+            # Basic cleaning
+            text = text.lower()
+            text = re.sub(r'<[^>]+>', '', text)
+            text = re.sub(r'[^a-z0-9\s]', ' ', text)
+
+            # Tokenize
+            tokens = word_tokenize(text)
+            processed_tokens = []
+
+            for token in tokens:
+                if len(token) < 2 or not token.isalnum():
+                    continue
+
+                if token in self.stop_words:
+                    continue
+
+                lemmatized = self.lemmatizer.lemmatize(token)
+                stemmed = self.stemmer.stem(lemmatized)
+                processed_tokens.append(stemmed)
+
+            return processed_tokens
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +76,7 @@ TFIDF_VECTORS_PATH = "/tmp/tfidf_vectors.joblib"
 
 # Pre-trained Antique model paths (update these paths after training)
 ANTIQUE_MODEL_PATH = "/tmp/tfidf_vectorizer.joblib"
-ANTIQUE_MATRIX_PATH = "/tmp/atfidf_matrix.joblib"
+ANTIQUE_MATRIX_PATH = "/tmp/tfidf_matrix.joblib"
 ANTIQUE_METADATA_PATH = "/tmp/document_metadata.joblib"
 USE_PRETRAINED_ANTIQUE = True  # Set to True to use pre-trained Antique model
 
@@ -232,10 +279,8 @@ class TFIDFService:
     def _load_pretrained_antique_model(self):
         """Load pre-trained Antique TF-IDF model"""
         try:
-            if os.path.exists(ANTIQUE_MODEL_PATH) and os.path.exists(ANTIQUE_MATRIX_PATH) and os.path.exists(ANTIQUE_METADATA_PATH):
+            if os.path.exists(ANTIQUE_MODEL_PATH):
                 logger.info("Loading pre-trained Antique TF-IDF model...")
-                
-                # Load vectorizer
                 self.vectorizer = joblib.load(ANTIQUE_MODEL_PATH)
                 
                 # Load TF-IDF matrix
@@ -244,14 +289,14 @@ class TFIDFService:
                 # Load document metadata
                 metadata = joblib.load(ANTIQUE_METADATA_PATH)
                 
-                # Convert documents list to dict for compatibility
+                # Convert metadata list to dict for compatibility
                 self.documents = {doc['doc_id']: Document(
                     id=doc['doc_id'],
-                    text=doc['text'],
-                    metadata={}
-                ) for doc in metadata['documents']}
+                    text=doc['raw_text'],
+                    metadata={'length': doc.get('length', 0)}
+                ) for doc in metadata}
                 
-                self.document_order = metadata['document_order']
+                self.document_order = [doc['doc_id'] for doc in metadata]
                 self.is_trained = True
                 self.using_pretrained = True
                 
@@ -293,7 +338,7 @@ class TFIDFService:
             "text_cleaning_service": TEXT_CLEANING_SERVICE_URL,
             "matrix_shape": self.tfidf_matrix.shape if self.tfidf_matrix is not None else None
         }
-    
+
     def _build_inverted_index(self, cleaned_texts: List[str]):
         """Build inverted index from cleaned documents"""
         logger.info("Building inverted index...")
@@ -337,39 +382,14 @@ class TFIDFService:
         
         logger.info(f"Inverted index built: {len(self.vocabulary)} terms, {len(cleaned_texts)} documents")
     
-    def search_with_inverted_index(self, query_terms: List[str], top_k: int = 10) -> List[Tuple[str, float]]:
-        """Search using inverted index for faster retrieval"""
-        if not self.inverted_index:
-            raise ValueError("Inverted index not built. Please rebuild the index.")
-        
-        # Calculate document scores using inverted index
-        doc_scores = defaultdict(float)
-        
-        for term in query_terms:
-            if term in self.inverted_index:
-                # Get documents containing this term
-                for doc_idx, tf_idf_score in self.inverted_index[term]:
-                    doc_scores[doc_idx] += tf_idf_score
-        
-        # Sort documents by score
-        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
-        
-        # Return top-k results
-        results = []
-        for doc_idx, score in sorted_docs[:top_k]:
-            doc_id = self.document_order[doc_idx]
-            results.append((doc_id, score))
-        
-        return results
-    
-async def search_with_inverted_index(self, query: str, top_k: int = 10) -> SearchResponse:
+    async def search_hybrid(self, query: str, top_k: int = 10, use_inverted_index: bool = True) -> SearchResponse:
         """Hybrid search using both TF-IDF cosine similarity and inverted index"""
         start_time = asyncio.get_event_loop().time()
         
         if not self.is_trained:
             raise ValueError("TF-IDF model not trained. Please index documents first.")
         
-# Clean query
+        # Clean query
         cleaned_query = await self.clean_text(query)
         query_terms = cleaned_query.split()
 
@@ -399,15 +419,6 @@ async def search_with_inverted_index(self, query: str, top_k: int = 10) -> Searc
             # Rank based on cosine similarity
             refined_results.sort(key=lambda x: x[1], reverse=True)
             final_results = refined_results[:top_k]
-        else:
-            final_results = []
-                    refined_results.append((doc_id, combined_score))
-                
-                # Sort by combined score
-                refined_results.sort(key=lambda x: x[1], reverse=True)
-                final_results = refined_results[:top_k]
-            else:
-                final_results = []
         else:
             # Fallback to regular TF-IDF search
             regular_search = await self.search(query, top_k)

@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-ENHANCED_CLEANING_SERVICE_URL = "http://localhost:8005"
+ENHANCED_CLEANING_SERVICE_URL = "http://localhost:8003"
 MODEL_BASE_PATH = "/Users/raafatmhanna/Desktop/custom-search-engine/backend/models"
 
 # Pre-trained model paths

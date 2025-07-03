@@ -1,7 +1,7 @@
 """
-Enhanced TF-IDF Representation Service
+Enhanced TF-IDF Quora Representation Service
 Optimized for higher MAP scores with improved vectorization parameters,
-query expansion, and advanced scoring techniques
+query expansion, and advanced scoring techniques specifically for Quora dataset
 """
 
 import asyncio
@@ -31,15 +31,15 @@ logger = logging.getLogger(__name__)
 TEXT_CLEANING_SERVICE_URL = "http://localhost:8003"
 INVERTED_INDEX_SERVICE_URL = "http://localhost:8006"
 
-# Enhanced model paths
-ENHANCED_MODEL_PATH = "/tmp/enhanced_tfidf_model.joblib"
-ENHANCED_VECTORS_PATH = "/tmp/enhanced_tfidf_vectors.joblib"
-QUERY_EXPANSION_PATH = "/tmp/query_expansion_data.joblib"
+# Enhanced model paths for Quora
+ENHANCED_QUORA_MODEL_PATH = "/tmp/enhanced_tfidf_quora_model.joblib"
+ENHANCED_QUORA_VECTORS_PATH = "/tmp/enhanced_tfidf_quora_vectors.joblib"
+QUERY_EXPANSION_QUORA_PATH = "/tmp/query_expansion_quora_data.joblib"
 
-# Pre-trained Antique model paths
-ANTIQUE_MODEL_PATH = "/tmp/tfidf_vectorizer.joblib"
-ANTIQUE_MATRIX_PATH = "/tmp/tfidf_matrix.joblib"
-ANTIQUE_METADATA_PATH = "/tmp/document_metadata.joblib"
+# Pre-trained Quora model paths
+QUORA_MODEL_PATH = "/tmp/tfidf_quora_vectorizer.joblib"
+QUORA_MATRIX_PATH = "/tmp/tfidf_quora_matrix.joblib"
+QUORA_METADATA_PATH = "/tmp/quora_document_metadata.joblib"
 
 # Request/Response Models
 class Document(BaseModel):
@@ -82,8 +82,8 @@ class IndexResponse(BaseModel):
     processing_time: float
     model_info: Dict[str, Any]
 
-class EnhancedTFIDFService:
-    """Enhanced TF-IDF service optimized for higher MAP scores"""
+class EnhancedTFIDFQuoraService:
+    """Enhanced TF-IDF service optimized for higher MAP scores on Quora dataset"""
     
     def __init__(self):
         self.vectorizer = None
@@ -109,12 +109,12 @@ class EnhancedTFIDFService:
         self.http_client = httpx.AsyncClient(timeout=30.0)
         
         # Try to load pre-trained model
-        self._load_pretrained_antique_model()
+        self._load_pretrained_quora_model()
         if not self.is_trained:
             self._load_model()
     
     def _get_enhanced_vectorizer_params(self) -> Dict[str, Any]:
-        """Get optimized TF-IDF parameters for higher MAP scores"""
+        """Get optimized TF-IDF parameters for higher MAP scores on Quora"""
         return {
             'max_features': 100000,  # Increased from 10k to 100k
             'ngram_range': (1, 3),   # Include trigrams for better phrase matching
@@ -153,13 +153,13 @@ class EnhancedTFIDFService:
         return text.strip()
     
     async def index_documents(self, request: IndexDocumentsRequest) -> IndexResponse:
-        """Index documents with enhanced TF-IDF parameters"""
+        """Index documents with enhanced TF-IDF parameters for Quora"""
         start_time = time.time()
         
         if not request.documents:
             raise ValueError("No documents provided for indexing")
         
-        logger.info(f"Starting enhanced indexing of {len(request.documents)} documents")
+        logger.info(f"Starting enhanced Quora indexing of {len(request.documents)} documents")
         
         # Clean all document texts
         cleaned_texts = []
@@ -186,7 +186,7 @@ class EnhancedTFIDFService:
         self.vectorizer = TfidfVectorizer(**vectorizer_params)
         
         # Fit and transform documents
-        logger.info("Training enhanced TF-IDF model...")
+        logger.info("Training enhanced TF-IDF model for Quora...")
         self.tfidf_matrix = self.vectorizer.fit_transform(cleaned_texts)
         
         # Store IDF values for later use
@@ -222,15 +222,16 @@ class EnhancedTFIDFService:
             "matrix_shape": list(self.tfidf_matrix.shape),
             "lsa_components": self.lsa_model.n_components,
             "query_expansion_enabled": request.enable_query_expansion,
-            "average_doc_length": np.mean(list(self.document_lengths.values()))
+            "average_doc_length": np.mean(list(self.document_lengths.values())),
+            "dataset": "Quora"
         }
         
-        logger.info(f"Enhanced indexing completed in {processing_time:.2f}s")
+        logger.info(f"Enhanced Quora indexing completed in {processing_time:.2f}s")
         logger.info(f"Vocabulary size: {vocabulary_size:,}")
         logger.info(f"Matrix shape: {self.tfidf_matrix.shape}")
         
         return IndexResponse(
-            message="Documents indexed successfully with enhanced parameters",
+            message="Quora documents indexed successfully with enhanced parameters",
             documents_indexed=len(request.documents),
             vocabulary_size=vocabulary_size,
             processing_time=processing_time,
@@ -259,7 +260,7 @@ class EnhancedTFIDFService:
     
     def _build_query_expansion_data(self, cleaned_texts: List[str]):
         """Build query expansion data using term co-occurrence"""
-        logger.info("Building query expansion data...")
+        logger.info("Building query expansion data for Quora...")
         
         # Build term co-occurrence matrix
         for text in cleaned_texts:
@@ -308,11 +309,11 @@ class EnhancedTFIDFService:
         return expanded_terms
     
     async def search(self, request: SearchRequest) -> SearchResponse:
-        """Enhanced search with query expansion and reranking"""
+        """Enhanced search with query expansion and reranking for Quora"""
         start_time = time.time()
         
         if not self.is_trained:
-            raise ValueError("Enhanced TF-IDF model not trained. Please index documents first.")
+            raise ValueError("Enhanced TF-IDF Quora model not trained. Please index documents first.")
         
         original_query = request.query
         
@@ -327,7 +328,7 @@ class EnhancedTFIDFService:
         if request.use_query_expansion and self.query_expansion_enabled:
             expanded_terms = self._expand_query(query_terms, max_expansions=2)
             expanded_query_str = " ".join(expanded_terms)
-            logger.debug(f"Query expanded from '{cleaned_query}' to '{expanded_query_str}'")
+            logger.debug(f"Quora query expanded from '{cleaned_query}' to '{expanded_query_str}'")
         
         # Get candidates from inverted index service (if available)
         candidate_results = await self._get_inverted_index_candidates(expanded_terms, request.top_k * 3)
@@ -389,7 +390,8 @@ class EnhancedTFIDFService:
                     "tfidf_score": float(similarity_score),
                     "rank": i + 1,
                     "matched_terms": self._get_matched_terms(cleaned_query, doc.text),
-                    "query_expanded": request.use_query_expansion and len(expanded_terms) > len(query_terms)
+                    "query_expanded": request.use_query_expansion and len(expanded_terms) > len(query_terms),
+                    "dataset": "Quora"
                 }
                 
                 results.append(SearchResult(
@@ -408,10 +410,11 @@ class EnhancedTFIDFService:
             "candidates_from_index": len(candidate_results) if candidate_results else 0,
             "semantic_reranking_applied": request.enable_reranking,
             "similarity_threshold": request.similarity_threshold,
-            "processing_method": "hybrid" if candidate_results else "full_tfidf"
+            "processing_method": "hybrid" if candidate_results else "full_tfidf",
+            "dataset": "Quora"
         }
         
-        logger.info(f"Enhanced search completed in {processing_time:.3f}s, found {len(results)} results")
+        logger.info(f"Enhanced Quora search completed in {processing_time:.3f}s, found {len(results)} results")
         
         return SearchResponse(
             query=original_query,
@@ -488,7 +491,8 @@ class EnhancedTFIDFService:
             "min_doc_length": np.min(doc_lengths),
             "max_doc_length": np.max(doc_lengths),
             "tfidf_matrix_density": self.tfidf_matrix.nnz / (self.tfidf_matrix.shape[0] * self.tfidf_matrix.shape[1]),
-            "lsa_explained_variance": np.sum(self.lsa_model.explained_variance_ratio_) if self.lsa_model else 0
+            "lsa_explained_variance": np.sum(self.lsa_model.explained_variance_ratio_) if self.lsa_model else 0,
+            "dataset": "Quora"
         }
     
     def _save_enhanced_model(self):
@@ -503,27 +507,28 @@ class EnhancedTFIDFService:
                 'collection_stats': self.collection_stats,
                 'idf_values': self.idf_values,
                 'term_similarities': self.term_similarities,
-                'query_expansion_enabled': self.query_expansion_enabled
+                'query_expansion_enabled': self.query_expansion_enabled,
+                'dataset': 'Quora'
             }
             
-            joblib.dump(model_data, ENHANCED_MODEL_PATH)
+            joblib.dump(model_data, ENHANCED_QUORA_MODEL_PATH)
             joblib.dump({
                 'tfidf_matrix': self.tfidf_matrix,
                 'lsa_vectors': self.lsa_vectors
-            }, ENHANCED_VECTORS_PATH)
+            }, ENHANCED_QUORA_VECTORS_PATH)
             
-            logger.info("Enhanced TF-IDF model saved successfully")
+            logger.info("Enhanced TF-IDF Quora model saved successfully")
             
         except Exception as e:
-            logger.error(f"Error saving enhanced model: {e}")
+            logger.error(f"Error saving enhanced Quora model: {e}")
     
     def _load_model(self):
         """Load enhanced model from disk"""
         try:
-            if os.path.exists(ENHANCED_MODEL_PATH) and os.path.exists(ENHANCED_VECTORS_PATH):
+            if os.path.exists(ENHANCED_QUORA_MODEL_PATH) and os.path.exists(ENHANCED_QUORA_VECTORS_PATH):
                 # Load model components
-                model_data = joblib.load(ENHANCED_MODEL_PATH)
-                vector_data = joblib.load(ENHANCED_VECTORS_PATH)
+                model_data = joblib.load(ENHANCED_QUORA_MODEL_PATH)
+                vector_data = joblib.load(ENHANCED_QUORA_VECTORS_PATH)
                 
                 self.vectorizer = model_data['vectorizer']
                 self.lsa_model = model_data.get('lsa_model')
@@ -539,21 +544,21 @@ class EnhancedTFIDFService:
                 self.lsa_vectors = vector_data.get('lsa_vectors')
                 
                 self.is_trained = True
-                logger.info("Enhanced TF-IDF model loaded successfully")
+                logger.info("Enhanced TF-IDF Quora model loaded successfully")
                 
         except Exception as e:
-            logger.error(f"Error loading enhanced model: {e}")
+            logger.error(f"Error loading enhanced Quora model: {e}")
     
-    def _load_pretrained_antique_model(self):
-        """Load pre-trained Antique model and enhance it"""
+    def _load_pretrained_quora_model(self):
+        """Load pre-trained Quora model and enhance it"""
         try:
-            if os.path.exists(ANTIQUE_MODEL_PATH):
-                logger.info("Loading and enhancing pre-trained Antique model...")
+            if os.path.exists(QUORA_MODEL_PATH):
+                logger.info("Loading and enhancing pre-trained Quora model...")
                 
                 # Load basic components
-                self.vectorizer = joblib.load(ANTIQUE_MODEL_PATH)
-                self.tfidf_matrix = joblib.load(ANTIQUE_MATRIX_PATH)
-                metadata = joblib.load(ANTIQUE_METADATA_PATH)
+                self.vectorizer = joblib.load(QUORA_MODEL_PATH)
+                self.tfidf_matrix = joblib.load(QUORA_MATRIX_PATH)
+                metadata = joblib.load(QUORA_METADATA_PATH)
                 
                 # Process metadata
                 if isinstance(metadata, list):
@@ -566,7 +571,7 @@ class EnhancedTFIDFService:
                     self.document_lengths = {doc['doc_id']: len(doc['raw_text'].split()) for doc in metadata}
                 
                 # Build LSA model for pre-trained data
-                logger.info("Building LSA model for pre-trained data...")
+                logger.info("Building LSA model for pre-trained Quora data...")
                 self.lsa_model = TruncatedSVD(n_components=min(300, self.tfidf_matrix.shape[1] - 1))
                 self.lsa_vectors = self.lsa_model.fit_transform(self.tfidf_matrix)
                 self.lsa_vectors = normalize(self.lsa_vectors, norm='l2')
@@ -577,26 +582,27 @@ class EnhancedTFIDFService:
                 self.is_trained = True
                 self.using_pretrained = True
                 
-                logger.info(f"Enhanced pre-trained model loaded!")
+                logger.info(f"Enhanced pre-trained Quora model loaded!")
                 logger.info(f"Documents: {len(self.documents):,}")
                 logger.info(f"Vocabulary: {len(self.vectorizer.vocabulary_):,}")
                 logger.info(f"LSA components: {self.lsa_model.n_components}")
                 
         except Exception as e:
-            logger.error(f"Error loading pre-trained model: {e}")
+            logger.error(f"Error loading pre-trained Quora model: {e}")
     
     def get_status(self) -> Dict[str, Any]:
         """Get enhanced service status"""
         return {
             "is_trained": self.is_trained,
             "using_pretrained": self.using_pretrained,
-            "model_type": "enhanced_pretrained" if self.using_pretrained else "enhanced_custom",
+            "model_type": "enhanced_pretrained_quora" if self.using_pretrained else "enhanced_custom_quora",
             "documents_count": len(self.documents),
             "vocabulary_size": len(self.vectorizer.vocabulary_) if self.vectorizer else 0,
             "lsa_enabled": self.lsa_model is not None,
             "query_expansion_enabled": self.query_expansion_enabled,
             "collection_stats": self.collection_stats,
             "matrix_shape": list(self.tfidf_matrix.shape) if self.tfidf_matrix is not None else None,
+            "dataset": "Quora",
             "services": {
                 "text_cleaning": TEXT_CLEANING_SERVICE_URL,
                 "inverted_index": INVERTED_INDEX_SERVICE_URL
@@ -609,33 +615,34 @@ class EnhancedTFIDFService:
 
 # FastAPI app
 app = FastAPI(
-    title="Enhanced TF-IDF Representation Service",
-    description="Advanced TF-IDF service optimized for higher MAP scores",
+    title="Enhanced TF-IDF Quora Representation Service",
+    description="Advanced TF-IDF service optimized for higher MAP scores on Quora dataset",
     version="2.0.0"
 )
 
 # Global service instance
-enhanced_tfidf_service = None
+enhanced_tfidf_quora_service = None
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize service on startup"""
-    global enhanced_tfidf_service
-    enhanced_tfidf_service = EnhancedTFIDFService()
+    global enhanced_tfidf_quora_service
+    enhanced_tfidf_quora_service = EnhancedTFIDFQuoraService()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    if enhanced_tfidf_service:
-        await enhanced_tfidf_service.close()
+    if enhanced_tfidf_quora_service:
+        await enhanced_tfidf_quora_service.close()
 
 @app.get("/")
 async def root():
     """Root endpoint with service information"""
     return {
-        "service": "Enhanced TF-IDF Representation Service",
+        "service": "Enhanced TF-IDF Quora Representation Service",
         "version": "2.0.0",
-        "description": "Advanced TF-IDF service optimized for higher MAP scores",
+        "description": "Advanced TF-IDF service optimized for higher MAP scores on Quora dataset",
+        "dataset": "Quora",
         "enhancements": [
             "Increased vocabulary size (100k features)",
             "Trigram support for better phrase matching",
@@ -643,7 +650,8 @@ async def root():
             "Semantic reranking with LSA",
             "Hybrid search with inverted index",
             "Advanced text cleaning pipeline",
-            "Detailed scoring explanations"
+            "Detailed scoring explanations",
+            "Optimized for Quora question-answer pairs"
         ],
         "endpoints": {
             "POST /index": "Index documents with enhanced parameters",
@@ -658,59 +666,61 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "enhanced_tfidf_service",
-        "is_trained": enhanced_tfidf_service.is_trained,
-        "model_type": "enhanced_pretrained" if enhanced_tfidf_service.using_pretrained else "enhanced_custom",
+        "service": "enhanced_tfidf_quora_service",
+        "dataset": "Quora",
+        "is_trained": enhanced_tfidf_quora_service.is_trained,
+        "model_type": "enhanced_pretrained_quora" if enhanced_tfidf_quora_service.using_pretrained else "enhanced_custom_quora",
         "features_enabled": {
-            "lsa": enhanced_tfidf_service.lsa_model is not None,
-            "query_expansion": enhanced_tfidf_service.query_expansion_enabled
+            "lsa": enhanced_tfidf_quora_service.lsa_model is not None,
+            "query_expansion": enhanced_tfidf_quora_service.query_expansion_enabled
         }
     }
 
 @app.get("/status")
 async def get_status():
     """Get detailed service status"""
-    return enhanced_tfidf_service.get_status()
+    return enhanced_tfidf_quora_service.get_status()
 
 @app.post("/index", response_model=IndexResponse)
 async def index_documents(request: IndexDocumentsRequest):
-    """Index documents with enhanced TF-IDF parameters"""
+    """Index documents with enhanced TF-IDF parameters for Quora"""
     try:
-        result = await enhanced_tfidf_service.index_documents(request)
+        result = await enhanced_tfidf_quora_service.index_documents(request)
         return result
     except Exception as e:
-        logger.error(f"Error indexing documents: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Enhanced indexing error: {str(e)}")
+        logger.error(f"Error indexing Quora documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enhanced Quora indexing error: {str(e)}")
 
 @app.post("/search", response_model=SearchResponse)
 async def search_documents(request: SearchRequest):
-    """Enhanced search with query expansion and reranking"""
+    """Enhanced search with query expansion and reranking for Quora"""
     try:
-        result = await enhanced_tfidf_service.search(request)
+        result = await enhanced_tfidf_quora_service.search(request)
         return result
     except Exception as e:
-        logger.error(f"Error in enhanced search: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Enhanced search error: {str(e)}")
+        logger.error(f"Error in enhanced Quora search: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enhanced Quora search error: {str(e)}")
 
 @app.get("/collection_stats")
 async def get_collection_stats():
-    """Get detailed collection statistics"""
-    if not enhanced_tfidf_service.is_trained:
-        raise HTTPException(status_code=503, detail="Model not trained")
+    """Get detailed collection statistics for Quora"""
+    if not enhanced_tfidf_quora_service.is_trained:
+        raise HTTPException(status_code=503, detail="Quora model not trained")
     
     return {
-        "collection_stats": enhanced_tfidf_service.collection_stats,
-        "vocabulary_sample": list(enhanced_tfidf_service.vectorizer.vocabulary_.keys())[:20],
-        "top_idf_terms": sorted(enhanced_tfidf_service.idf_values.items(), 
+        "collection_stats": enhanced_tfidf_quora_service.collection_stats,
+        "vocabulary_sample": list(enhanced_tfidf_quora_service.vectorizer.vocabulary_.keys())[:20],
+        "top_idf_terms": sorted(enhanced_tfidf_quora_service.idf_values.items(), 
                               key=lambda x: x[1], reverse=True)[:20],
-        "query_expansion_terms": len(enhanced_tfidf_service.term_similarities),
+        "query_expansion_terms": len(enhanced_tfidf_quora_service.term_similarities),
+        "dataset": "Quora",
         "model_info": {
-            "tfidf_params": enhanced_tfidf_service._get_enhanced_vectorizer_params(),
-            "lsa_components": enhanced_tfidf_service.lsa_model.n_components if enhanced_tfidf_service.lsa_model else 0,
-            "matrix_density": enhanced_tfidf_service.collection_stats.get("tfidf_matrix_density", 0)
+            "tfidf_params": enhanced_tfidf_quora_service._get_enhanced_vectorizer_params(),
+            "lsa_components": enhanced_tfidf_quora_service.lsa_model.n_components if enhanced_tfidf_quora_service.lsa_model else 0,
+            "matrix_density": enhanced_tfidf_quora_service.collection_stats.get("tfidf_matrix_density", 0)
         }
     }
 
 if __name__ == "__main__":
-    # Enhanced TF-IDF Service runs on port 8007
-    uvicorn.run(app, host="0.0.0.0", port=8007)
+    # Enhanced TF-IDF Quora Service runs on port 8008
+    uvicorn.run(app, host="0.0.0.0", port=8008)

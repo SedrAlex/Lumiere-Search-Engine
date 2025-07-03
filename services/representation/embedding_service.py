@@ -1,6 +1,6 @@
 """
 Embedding Representation Service
-Provides semantic document representation using all-MiniLM-L6-v2 with inverted index
+Provides pure semantic document representation using all-MiniLM-L6-v2
 """
 
 import asyncio
@@ -28,12 +28,15 @@ DATABASE_SERVICE_URL = "http://localhost:8004"  # Database service for cleaned d
 EMBEDDING_MODEL_PATH = "/tmp/embedding_model"
 EMBEDDING_VECTORS_PATH = "/tmp/embedding_vectors.joblib"
 
-# Pre-trained Antique model paths (update these paths after training)
-ANTIQUE_MODEL_PATH = "/tmp/antique_embedding_model/"
-ANTIQUE_EMBEDDINGS_PATH = "/tmp/antique_embeddings_matrix.joblib"
-ANTIQUE_FAISS_PATH = "/tmp/antique_faiss_index.faiss"
-ANTIQUE_INVERTED_INDEX_PATH = "/tmp/antique_inverted_index.joblib"
-ANTIQUE_METADATA_PATH = "/tmp/antique_embedding_document_metadata.joblib"
+# Model base path
+MODEL_BASE_PATH = "/Users/raafatmhanna/Desktop/custom-search-engine/models"
+
+# Pre-trained Antique model paths
+ANTIQUE_MODEL_PATH = f"{MODEL_BASE_PATH}/antique_embedding_model/"
+ANTIQUE_EMBEDDINGS_PATH = f"{MODEL_BASE_PATH}/antique_embeddings_matrix.joblib"
+ANTIQUE_FAISS_PATH = f"{MODEL_BASE_PATH}/antique_faiss_index.faiss"
+# Removed inverted index - not needed for pure embeddings
+ANTIQUE_METADATA_PATH = f"{MODEL_BASE_PATH}/antique_embedding_document_metadata.joblib"
 USE_PRETRAINED_ANTIQUE = True  # Set to True to use pre-trained Antique model
 USE_DATABASE_CLEANED_DOCS = True  # Set to True to load cleaned docs from database
 
@@ -51,15 +54,10 @@ class IndexDocumentsRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 10
-    use_inverted_index: bool = True  # Use inverted index for term filtering
-    semantic_weight: float = 0.7     # Weight for semantic similarity
-    term_weight: float = 0.3         # Weight for term matching
 
 class SearchResult(BaseModel):
     document_id: str
     score: float
-    semantic_score: float
-    term_score: float
     text: str
     metadata: Dict[str, Any]
 
@@ -83,7 +81,6 @@ class EmbeddingService:
         self.model = None
         self.embeddings_matrix = None
         self.faiss_index = None
-        self.inverted_index = {}
         self.documents = {}  # document_id -> Document
         self.document_order = []  # To maintain order for matrix indexing
         self.is_trained = False
@@ -232,8 +229,7 @@ class EmbeddingService:
         # Create FAISS index
         self._create_faiss_index()
         
-        # Build inverted index
-        self._build_inverted_index(cleaned_texts)
+        # No inverted index needed for pure embeddings
         
         self.is_trained = True
         
@@ -253,60 +249,54 @@ class EmbeddingService:
         )
     
     def _create_faiss_index(self):
-        """Create FAISS index for fast similarity search"""
+        """Create optimized FAISS index for fast similarity search"""
         if self.embeddings_matrix is not None:
             # Ensure embeddings are float32
             embeddings_float32 = self.embeddings_matrix.astype(np.float32)
             
-            # Create FAISS index for cosine similarity (using IP since embeddings are normalized)
-            self.faiss_index = faiss.IndexFlatIP(self.embedding_dimension)
+            # Choose index type based on dataset size
+            num_vectors = embeddings_float32.shape[0]
+            
+            if num_vectors < 1000:
+                # For small datasets, use flat index
+                self.faiss_index = faiss.IndexFlatIP(self.embedding_dimension)
+                logger.info(f"Using FAISS flat index for {num_vectors} vectors")
+            elif num_vectors < 100000:
+                # For medium datasets, use HNSW for better speed/accuracy tradeoff
+                self.faiss_index = faiss.IndexHNSWFlat(self.embedding_dimension, 32)
+                self.faiss_index.hnsw.efConstruction = 200
+                self.faiss_index.hnsw.efSearch = 50
+                logger.info(f"Using FAISS HNSW index for {num_vectors} vectors")
+            else:
+                # For large datasets, use IVF index
+                nlist = min(int(np.sqrt(num_vectors)), 1000)
+                quantizer = faiss.IndexFlatIP(self.embedding_dimension)
+                self.faiss_index = faiss.IndexIVFFlat(quantizer, self.embedding_dimension, nlist)
+                # Train the index
+                self.faiss_index.train(embeddings_float32)
+                logger.info(f"Using FAISS IVF index with {nlist} clusters for {num_vectors} vectors")
+            
+            # Add vectors to index
             self.faiss_index.add(embeddings_float32)
             logger.info(f"FAISS index created with {self.faiss_index.ntotal} vectors")
     
-    def _build_inverted_index(self, cleaned_texts: List[str]):
-        """Build inverted index for term-based filtering"""
-        self.inverted_index = defaultdict(list)
-        
-        for doc_idx, cleaned_text in enumerate(cleaned_texts):
-            tokens = set(cleaned_text.split())  # Use set to avoid duplicates
-            for token in tokens:
-                if token.strip():
-                    self.inverted_index[token].append(doc_idx)
-        
-        # Convert to regular dict and sort document lists
-        self.inverted_index = {term: sorted(doc_list) for term, doc_list in self.inverted_index.items()}
-        logger.info(f"Inverted index built with {len(self.inverted_index)} terms")
+    # Inverted index removed - pure embeddings don't need term-based filtering
     
-    def _get_term_filtered_candidates(self, query_tokens: List[str], max_candidates: int = 1000) -> Set[int]:
-        """Get candidate documents using inverted index"""
-        if not self.inverted_index or not query_tokens:
-            return set(range(len(self.document_order)))  # Return all if no filtering
-        
-        # Get documents that contain any query terms
-        candidates = set()
-        for token in query_tokens:
-            if token in self.inverted_index:
-                candidates.update(self.inverted_index[token])
-        
-        # If too few candidates, add more documents
-        if len(candidates) < max_candidates // 2:
-            all_indices = set(range(len(self.document_order)))
-            remaining = all_indices - candidates
-            candidates.update(list(remaining)[:max_candidates - len(candidates)])
-        
-        return candidates
+    # Term filtering removed - pure embeddings use semantic similarity for all documents
     
-    async def search(self, query: str, top_k: int = 10, use_inverted_index: bool = True,
-                    semantic_weight: float = 0.7, term_weight: float = 0.3) -> SearchResponse:
-        """Search documents using hybrid semantic + term matching"""
+    async def search(self, query: str, top_k: int = 10) -> SearchResponse:
+        """Search documents using pure semantic similarity"""
         start_time = asyncio.get_event_loop().time()
         
-        if not self.is_trained:
-            raise ValueError("Embedding model not trained. Please index documents first.")
+        # Check if model and embeddings are available
+        if self.model is None:
+            raise ValueError("Embedding model not loaded. Please load a model first.")
+        
+        if self.embeddings_matrix is None or len(self.documents) == 0:
+            raise ValueError("No embeddings or documents available. Please index documents or load a pre-trained model.")
         
         # Clean query
         cleaned_query = await self.clean_text(query, for_query=True)
-        query_tokens = cleaned_query.split()
         
         # Generate query embedding
         with torch.no_grad():
@@ -316,90 +306,45 @@ class EmbeddingService:
                 normalize_embeddings=True
             ).astype(np.float32)
         
-        # Get candidate documents using inverted index
-        if use_inverted_index:
-            candidates = self._get_term_filtered_candidates(query_tokens)
-            search_method = "hybrid_semantic_term"
+        # Use FAISS index if available, otherwise fall back to numpy cosine similarity
+        if self.faiss_index is not None:
+            # Use FAISS index for fast similarity search
+            similarities, indices = self.faiss_index.search(query_embedding, min(top_k, len(self.document_order)))
+            similarities = similarities.flatten()
+            indices = indices.flatten()
         else:
-            candidates = set(range(len(self.document_order)))
-            search_method = "semantic_only"
-        
-        # Calculate semantic similarities for candidates
-        if candidates:
-            candidate_list = sorted(list(candidates))
-            candidate_embeddings = self.embeddings_matrix[candidate_list]
+            # Fall back to numpy-based cosine similarity search
+            logger.info("FAISS index not available, using numpy cosine similarity")
             
-            # Use FAISS for fast similarity computation
-            candidate_embeddings_float32 = candidate_embeddings.astype(np.float32)
-            temp_index = faiss.IndexFlatIP(self.embedding_dimension)
-            temp_index.add(candidate_embeddings_float32)
+            # Compute cosine similarities with all document embeddings
+            query_embedding_normalized = query_embedding / np.linalg.norm(query_embedding)
+            embeddings_normalized = self.embeddings_matrix / np.linalg.norm(self.embeddings_matrix, axis=1, keepdims=True)
             
-            semantic_scores, _ = temp_index.search(query_embedding, len(candidate_list))
-            semantic_scores = semantic_scores.flatten()
-        else:
-            candidate_list = []
-            semantic_scores = np.array([])
-        
-        # Calculate term matching scores for candidates
-        term_scores = []
-        if use_inverted_index and query_tokens:
-            for idx in candidate_list:
-                doc_id = self.document_order[idx]
-                doc = self.documents[doc_id]
-                doc_cleaned = await self.clean_text(doc.text, for_query=False)
-                doc_tokens = set(doc_cleaned.split())
-                
-                # Calculate term overlap
-                query_token_set = set(query_tokens)
-                overlap = len(query_token_set.intersection(doc_tokens))
-                term_score = overlap / len(query_token_set) if query_token_set else 0
-                term_scores.append(term_score)
-        else:
-            term_scores = [0.0] * len(candidate_list)
-        
-        # Combine scores
-        combined_scores = []
-        for i, idx in enumerate(candidate_list):
-            semantic_score = float(semantic_scores[i]) if i < len(semantic_scores) else 0.0
-            term_score = term_scores[i] if i < len(term_scores) else 0.0
+            similarities = np.dot(embeddings_normalized, query_embedding_normalized.T).flatten()
             
-            # Normalize semantic score to [0, 1] range
-            semantic_score = max(0, semantic_score)
-            
-            # Combined score
-            combined_score = semantic_weight * semantic_score + term_weight * term_score
-            
-            combined_scores.append({
-                'idx': idx,
-                'semantic_score': semantic_score,
-                'term_score': term_score,
-                'combined_score': combined_score
-            })
-        
-        # Sort by combined score and get top-k
-        combined_scores.sort(key=lambda x: x['combined_score'], reverse=True)
-        top_results = combined_scores[:top_k]
+            # Get top-k indices
+            top_k_indices = np.argsort(similarities)[::-1][:top_k]
+            similarities = similarities[top_k_indices]
+            indices = top_k_indices
         
         # Build results
         results = []
-        for result in top_results:
-            idx = result['idx']
-            doc_id = self.document_order[idx]
-            doc = self.documents[doc_id]
-            
-            results.append(SearchResult(
-                document_id=doc_id,
-                score=result['combined_score'],
-                semantic_score=result['semantic_score'],
-                term_score=result['term_score'],
-                text=doc.text,
-                metadata=doc.metadata or {}
-            ))
+        for i, idx in enumerate(indices):
+            if similarities[i] > 0:  # Only include results with positive similarity
+                doc_id = self.document_order[idx]
+                doc = self.documents[doc_id]
+                
+                results.append(SearchResult(
+                    document_id=doc_id,
+                    score=float(similarities[i]),
+                    text=doc.text,
+                    metadata=doc.metadata or {}
+                ))
         
         processing_time = asyncio.get_event_loop().time() - start_time
         
-        logger.info(f"Search completed in {processing_time:.2f}s, found {len(results)} results")
-        logger.info(f"Candidates filtered: {len(candidates)} out of {len(self.document_order)}")
+        search_method = "faiss_index" if self.faiss_index is not None else "numpy_cosine"
+        logger.info(f"Search completed in {processing_time:.2f}s using {search_method}, found {len(results)} results")
         
         return SearchResponse(
             query=query,
@@ -415,7 +360,6 @@ class EmbeddingService:
             # Save model components
             joblib.dump({
                 'embeddings_matrix': self.embeddings_matrix,
-                'inverted_index': self.inverted_index,
                 'documents': self.documents,
                 'document_order': self.document_order,
                 'embedding_dimension': self.embedding_dimension
@@ -433,51 +377,66 @@ class EmbeddingService:
         except Exception as e:
             logger.error(f"Error saving embedding model: {e}")
     
+    
     def _load_pretrained_antique_model(self):
         """Load pre-trained Antique embedding model"""
         try:
-            if (os.path.exists(ANTIQUE_MODEL_PATH) and 
-                os.path.exists(ANTIQUE_EMBEDDINGS_PATH) and 
-                os.path.exists(ANTIQUE_FAISS_PATH) and
-                os.path.exists(ANTIQUE_INVERTED_INDEX_PATH) and
-                os.path.exists(ANTIQUE_METADATA_PATH)):
+            # Check minimum required files (embeddings and metadata)
+            required_files = [ANTIQUE_EMBEDDINGS_PATH, ANTIQUE_METADATA_PATH]
+            if not all(os.path.exists(f) for f in required_files):
+                logger.info("Pre-trained Antique embeddings/metadata files not found, skipping...")
+                return
                 
-                logger.info("Loading pre-trained Antique embedding model...")
-                
-                # Load SentenceTransformer model
-                self.model = SentenceTransformer(ANTIQUE_MODEL_PATH)
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-                self.model = self.model.to(device)
-                self.embedding_dimension = self.model.get_sentence_embedding_dimension()
-                
-                # Load embeddings matrix
-                self.embeddings_matrix = joblib.load(ANTIQUE_EMBEDDINGS_PATH)
-                
-                # Load FAISS index
-                self.faiss_index = faiss.read_index(ANTIQUE_FAISS_PATH)
-                
-                # Load inverted index
-                self.inverted_index = joblib.load(ANTIQUE_INVERTED_INDEX_PATH)
-                
-                # Load document metadata
-                metadata = joblib.load(ANTIQUE_METADATA_PATH)
-                
-                # Convert documents list to dict for compatibility
-                self.documents = {doc['doc_id']: Document(
-                    id=doc['doc_id'],
-                    text=doc['text'],
-                    metadata={}
-                ) for doc in metadata['documents']}
-                
-                self.document_order = metadata['document_order']
-                self.is_trained = True
-                self.using_pretrained = True
-                
-                logger.info(f"Pre-trained Antique model loaded successfully!")
-                logger.info(f"Documents: {len(self.documents):,}")
-                logger.info(f"Embedding dimension: {self.embedding_dimension}")
+            logger.info("Loading pre-trained Antique embedding model...")
+            
+            # IMPORTANT: Use the same model that was used to generate the embeddings matrix
+            # According to training info, embeddings were generated with 'all-MiniLM-L6-v2'
+            logger.info("Loading original SentenceTransformer model that matches embeddings matrix...")
+            self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.model = self.model.to(device)
+            self.embedding_dimension = self.model.get_sentence_embedding_dimension()
+            logger.info(f"Loaded model: sentence-transformers/all-MiniLM-L6-v2 (matches embeddings matrix)")
+            
+            # Load embeddings matrix
+            self.embeddings_matrix = joblib.load(ANTIQUE_EMBEDDINGS_PATH)
+            logger.info(f"Loaded embeddings matrix with shape: {self.embeddings_matrix.shape}")
+            
+            # Try to load FAISS index (optional)
+            try:
+                if os.path.exists(ANTIQUE_FAISS_PATH):
+                    self.faiss_index = faiss.read_index(ANTIQUE_FAISS_PATH)
+                    logger.info(f"FAISS index loaded with {self.faiss_index.ntotal:,} vectors")
+                else:
+                    logger.info("FAISS index not found, will use numpy similarity search")
+                    self.faiss_index = None
+            except Exception as faiss_e:
+                logger.warning(f"Could not load FAISS index: {faiss_e}")
+                logger.info("Will use numpy similarity search instead")
+                self.faiss_index = None
+            
+            # Load document metadata
+            metadata = joblib.load(ANTIQUE_METADATA_PATH)
+            
+            # Convert documents list to dict for compatibility
+            self.documents = {doc['doc_id']: Document(
+                id=doc['doc_id'],
+                text=doc['text'],
+                metadata={}
+            ) for doc in metadata['documents']}
+            
+            self.document_order = metadata['document_order']
+            self.is_trained = True
+            self.using_pretrained = True
+            
+            search_method = "FAISS index" if self.faiss_index else "numpy similarity"
+            logger.info(f"Pre-trained Antique model loaded successfully using {search_method}!")
+            logger.info(f"Documents: {len(self.documents):,}")
+            logger.info(f"Embedding dimension: {self.embedding_dimension}")
+            if self.faiss_index:
                 logger.info(f"FAISS index size: {self.faiss_index.ntotal:,}")
-                logger.info(f"Inverted index terms: {len(self.inverted_index):,}")
+            else:
+                logger.info(f"Embeddings matrix shape: {self.embeddings_matrix.shape}")
                 
         except Exception as e:
             logger.error(f"Error loading pre-trained Antique model: {e}")
@@ -490,7 +449,6 @@ class EmbeddingService:
                 # Load model data
                 data = joblib.load(EMBEDDING_VECTORS_PATH)
                 self.embeddings_matrix = data['embeddings_matrix']
-                self.inverted_index = data['inverted_index']
                 self.documents = data['documents']
                 self.document_order = data['document_order']
                 self.embedding_dimension = data['embedding_dimension']
@@ -519,7 +477,7 @@ class EmbeddingService:
             "model_type": "pre-trained Antique" if self.using_pretrained else "custom",
             "documents_count": len(self.documents),
             "embedding_dimension": self.embedding_dimension,
-            "inverted_index_terms": len(self.inverted_index),
+            "uses_faiss_index": self.faiss_index is not None,
             "faiss_index_size": self.faiss_index.ntotal if self.faiss_index else 0,
             "text_cleaning_service": TEXT_CLEANING_SERVICE_URL,
             "embeddings_shape": self.embeddings_matrix.shape if self.embeddings_matrix is not None else None
@@ -532,7 +490,7 @@ class EmbeddingService:
 # FastAPI app for the embedding service
 app = FastAPI(
     title="Embedding Representation Service",
-    description="Semantic document representation using all-MiniLM-L6-v2 with inverted index",
+    description="Pure semantic document representation using all-MiniLM-L6-v2",
     version="1.0.0"
 )
 
@@ -559,10 +517,9 @@ async def root():
         "description": "Semantic document representation using all-MiniLM-L6-v2",
         "model": "all-MiniLM-L6-v2",
         "features": [
-            "Semantic embeddings",
-            "Inverted index filtering",
-            "Hybrid search (semantic + term)",
-            "FAISS fast search",
+            "Pure semantic embeddings",
+            "FAISS fast similarity search",
+            "Neural text representation",
             "Preprocessing service integration"
         ],
         "endpoints": {
@@ -605,14 +562,11 @@ async def index_documents(request: IndexDocumentsRequest):
 
 @app.post("/search", response_model=SearchResponse)
 async def search_documents(request: SearchRequest):
-    """Search documents using hybrid semantic + term matching"""
+    """Search documents using pure semantic similarity"""
     try:
         result = await embedding_service.search(
             request.query, 
-            request.top_k,
-            request.use_inverted_index,
-            request.semantic_weight,
-            request.term_weight
+            request.top_k
         )
         return result
     except Exception as e:
@@ -620,5 +574,5 @@ async def search_documents(request: SearchRequest):
         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 if __name__ == "__main__":
-    # This service runs on port 8003
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    # This service runs on port 8008
+    uvicorn.run(app, host="0.0.0.0", port=8008)

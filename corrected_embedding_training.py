@@ -155,8 +155,9 @@ print("✅ Unified text cleaner initialized (matching preprocessing service)!")
 def load_and_preprocess_antique_dataset():
     """Load Antique dataset, preprocess using your service, and store in database"""
     try:
-        print("📚 Loading Antique dataset...")
-        dataset = ir_datasets.load('antique/train')
+        print("📚 Loading FULL Antique dataset (all ~400k documents)...")
+        # Load the complete antique dataset (not just train split)
+        dataset = ir_datasets.load('antique')
         
         # Extract documents and queries
         raw_documents = []
@@ -196,11 +197,72 @@ def load_and_preprocess_antique_dataset():
         print(f"   🔍 Queries with relevance judgments: {len(valid_queries)}")
         print(f"   🎯 Relevance judgments: {len(qrels)}")
         
+        # Save raw dataset files to drive/downloads
+        save_raw_dataset_files(raw_documents, queries, qrels)
+        
         return raw_documents, queries, qrels
         
     except Exception as e:
         print(f"❌ Error loading dataset: {e}")
         return None, None, None
+
+def save_raw_dataset_files(raw_documents, queries, qrels):
+    """Save raw dataset files to drive/downloads directory"""
+    try:
+        print("💾 Saving raw dataset files to drive/downloads...")
+        
+        # Create drive/downloads directory if it doesn't exist
+        os.makedirs('drive/downloads', exist_ok=True)
+        
+        # Save documents
+        docs_data = []
+        for doc in raw_documents:
+            docs_data.append({
+                'doc_id': doc['doc_id'],
+                'text': doc['text']
+            })
+        
+        with open('drive/downloads/docs.json', 'w', encoding='utf-8') as f:
+            json.dump(docs_data, f, indent=2, ensure_ascii=False)
+        print("✅ Saved: drive/downloads/docs.json")
+        
+        # Save queries
+        queries_data = []
+        for query in queries:
+            queries_data.append({
+                'query_id': query['query_id'],
+                'text': query['text']
+            })
+        
+        with open('drive/downloads/queries.json', 'w', encoding='utf-8') as f:
+            json.dump(queries_data, f, indent=2, ensure_ascii=False)
+        print("✅ Saved: drive/downloads/queries.json")
+        
+        # Save qrels
+        with open('drive/downloads/qrels.json', 'w', encoding='utf-8') as f:
+            json.dump(qrels, f, indent=2)
+        print("✅ Saved: drive/downloads/qrels.json")
+        
+        # Save dataset statistics
+        stats = {
+            'total_documents': len(raw_documents),
+            'total_queries': len(queries),
+            'total_qrels': len(qrels),
+            'dataset_source': 'antique',
+            'timestamp': time.time()
+        }
+        
+        with open('drive/downloads/dataset_stats.json', 'w') as f:
+            json.dump(stats, f, indent=2)
+        print("✅ Saved: drive/downloads/dataset_stats.json")
+        
+        print(f"📊 Dataset files saved to drive/downloads/")
+        print(f"   📄 Documents: {len(raw_documents):,}")
+        print(f"   🔍 Queries: {len(queries):,}")
+        print(f"   🎯 QRels entries: {len(qrels):,}")
+        
+    except Exception as e:
+        print(f"❌ Error saving dataset files: {e}")
 
 def preprocess_and_store_documents(raw_documents):
     """Preprocess all documents using unified cleaning and store metadata"""
@@ -502,7 +564,7 @@ def save_embedding_models(model, embeddings_matrix, documents, cleaned_texts,
                 'preprocessing_applied': True,
                 'device': 'cuda' if torch.cuda.is_available() else 'cpu'
             },
-            'dataset': 'antique/train',
+            'dataset': 'antique',
             'cleaning_method': 'unified_preprocessing_service',
             'features': [
                 'sentence_transformer_embeddings',

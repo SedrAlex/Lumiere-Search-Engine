@@ -527,12 +527,12 @@ async def main():
     
     print("\n🚀 Loading Quora datasets...")
     
-    # Load datasets with reasonable limits for testing
+    # Load datasets with full data for production embeddings
     results = await loader.load_all_quora_datasets(
         load_beir=True,
         load_hf=True,
-        limit_docs=10000,  # Limit for testing
-        limit_queries=100
+        limit_docs=None,  # Full dataset - will take ~10 hours
+        limit_queries=None  # All queries
     )
     
     print("\n📊 Loading Results:")

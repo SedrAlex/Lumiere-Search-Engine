@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-ANTIQUE Query Processing Service
+Quora Query Processing Service
 Online service that processes user queries and performs similarity search using 
-SQLite database and cosine similarity instead of FAISS.
-Built with FastAPI for better performance and automatic API documentation.
+SQLite database and cosine similarity. Based on ANTIQUE service.
 """
 
 import os
@@ -25,20 +24,17 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from functools import lru_cache
 
-# Add the parent directory to Python path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class AntiqueQueryProcessor:
+class QuoraQueryProcessor:
     """
     Query processing service that uses SQLite database and cosine similarity
     to perform similarity search with top-10 ranked results.
     """
     
-    def __init__(self, text_processing_service_url="http://localhost:5001", models_dir="../models"):
+    def __init__(self, text_processing_service_url="http://localhost:5003", models_dir="../models"):
         """
         Initialize the query processor.
         
@@ -47,14 +43,14 @@ class AntiqueQueryProcessor:
             models_dir (str): Directory containing the models (not used anymore)
         """
         self.text_processing_url = text_processing_service_url
-        self.sqlite_db_path = 'antique_documents.db'
-        self.tsv_file_path = '/Users/raafatmhanna/Downloads/documents.tsv'
+        self.sqlite_db_path = 'quora_documents.db'
+        self.tsv_file_path = '/Users/raafatmhanna/Downloads/quora/docs.tsv'
         
         # Initialize components
         self.model = None
         
         # Caching and performance improvements
-        self.embeddings_cache_path = 'antique_embeddings_cache.pkl'
+        self.embeddings_cache_path = 'quora_embeddings_cache.pkl'
         self.doc_embeddings = None
         self.doc_ids_cache = None
         self.doc_texts_cache = None
@@ -249,41 +245,21 @@ class AntiqueQueryProcessor:
     def load_model_and_setup_documents(self):
         """Load the SentenceTransformer model and setup documents in SQLite."""
         try:
-            logger.info("Loading ANTIQUE model and setting up documents...")
+            logger.info("Loading Quora model and setting up documents...")
             
             # Check if text processing service is available
             if not self.test_text_processing_service():
                 logger.warning("Text processing service not available. Some features may not work.")
             
-            # Load the SentenceTransformer model in offline mode to prevent network issues
+            # Load the SentenceTransformer model
             logger.info("Loading model from HuggingFace: sentence-transformers/all-MiniLM-L6-v2")
             
-            # Set environment variables to force offline mode
-            os.environ['TRANSFORMERS_OFFLINE'] = '1'
-            os.environ['HF_HUB_OFFLINE'] = '1'
-            os.environ['HF_DATASETS_OFFLINE'] = '1'
-            
-            # Load model with offline configuration and error handling
             try:
-                self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', 
-                                               cache_folder=None,  # Use default cache
-                                               use_auth_token=False)  # Don't use auth token
-                logger.info("Model loaded successfully in offline mode")
-            except Exception as model_error:
-                logger.warning(f"Failed to load model in offline mode: {model_error}")
-                logger.info("Attempting to load model without offline constraints...")
-                
-                # Remove offline constraints and try again
-                if 'TRANSFORMERS_OFFLINE' in os.environ:
-                    del os.environ['TRANSFORMERS_OFFLINE']
-                if 'HF_HUB_OFFLINE' in os.environ:
-                    del os.environ['HF_HUB_OFFLINE']
-                if 'HF_DATASETS_OFFLINE' in os.environ:
-                    del os.environ['HF_DATASETS_OFFLINE']
-                
-                # Try loading without offline mode
                 self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                logger.info("Model loaded successfully in online mode")
+                logger.info("Model loaded successfully")
+            except Exception as model_error:
+                logger.error(f"Failed to load model: {model_error}")
+                raise
             
             # Check if SQLite database exists, if not create it
             if not os.path.exists(self.sqlite_db_path):
@@ -337,14 +313,9 @@ class AntiqueQueryProcessor:
             str: Processed text
         """
         try:
-            if endpoint == "query":
-                url = f"{self.text_processing_url}/process/query"
-                payload = {"query": text}
-                response_key = "processed_query"
-            else:
-                url = f"{self.text_processing_url}/process"
-                payload = {"text": text}
-                response_key = "processed_text"
+            url = f"{self.text_processing_url}/process"
+            payload = {"text": text}
+            response_key = "processed_text"
                 
             response = requests.post(url, json=payload, timeout=10)
             
@@ -370,7 +341,7 @@ class AntiqueQueryProcessor:
             np.ndarray: Query embedding
         """
         # Process the query using the text processing service
-        processed_query = self.call_text_processing_service(query, "query")
+        processed_query = self.call_text_processing_service(query)
         
         # Generate embedding
         embedding = self.model.encode([processed_query], normalize_embeddings=True)
@@ -509,9 +480,9 @@ class AntiqueQueryProcessor:
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="ANTIQUE Query Processing Service",
+    title="Quora Query Processing Service",
     description="Online query processing with cosine similarity search using SQLite database",
-    version="2.0.0"
+    version="1.0.0"
 )
 
 # Enable CORS for all origins
@@ -524,7 +495,7 @@ app.add_middleware(
 )
 
 # Initialize the query processor
-query_processor = AntiqueQueryProcessor()
+query_processor = QuoraQueryProcessor()
 
 # Pydantic models for request/response
 class SearchRequest(BaseModel):
@@ -547,7 +518,7 @@ class SearchResponse(BaseModel):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "antique-query-processing", "version": "2.0.0"}
+    return {"status": "healthy", "service": "quora-query-processing", "version": "1.0.0"}
 
 @app.post("/search", response_model=SearchResponse)
 async def search_documents(request: SearchRequest):
@@ -561,7 +532,7 @@ async def search_documents(request: SearchRequest):
         top_k = min(request.top_k, 50)
         
         # Process query and get results
-        processed_query = query_processor.call_text_processing_service(request.query, "query")
+        processed_query = query_processor.call_text_processing_service(request.query)
         results = query_processor.search_similar_documents(request.query, top_k)
         
         return {
@@ -603,82 +574,13 @@ async def get_stats():
         logger.error(f"Error getting stats: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
-@app.post("/cache/refresh")
-async def refresh_cache():
-    """Refresh the embeddings cache."""
-    try:
-        logger.info("Refreshing embeddings cache...")
-        query_processor.precompute_embeddings()
-        return {
-            "status": "success",
-            "message": "Embeddings cache refreshed successfully",
-            "documents_processed": len(query_processor.doc_ids_cache) if query_processor.doc_ids_cache else 0
-        }
-    except Exception as e:
-        logger.error(f"Error refreshing cache: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to refresh cache: {str(e)}")
-
-@app.get("/cache/status")
-async def cache_status():
-    """Get cache status information."""
-    try:
-        has_cache = query_processor.doc_embeddings is not None
-        cache_valid = query_processor.is_cache_valid() if has_cache else False
-        
-        return {
-            "cache_exists": has_cache,
-            "cache_valid": cache_valid,
-            "cached_documents": len(query_processor.doc_ids_cache) if query_processor.doc_ids_cache else 0,
-            "cache_timestamp": query_processor.cache_timestamp,
-            "cache_file_exists": os.path.exists(query_processor.embeddings_cache_path)
-        }
-    except Exception as e:
-        logger.error(f"Error getting cache status: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get cache status: {str(e)}")
-
-@app.post("/cache/clear")
-async def clear_cache():
-    """Clear the query processing LRU cache."""
-    try:
-        query_processor.clear_query_cache()
-        return {
-            "status": "success",
-            "message": "Query processing cache cleared successfully"
-        }
-    except Exception as e:
-        logger.error(f"Error clearing cache: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
-
-@app.get("/info")
-async def service_info():
-    """Get service information."""
-    return {
-        "service": "ANTIQUE Query Processing Service",
-        "version": "2.0.0",
-        "description": "Online query processing with cosine similarity search using SQLite database",
-        "features": [
-            "SQLite database storage",
-            "Cosine similarity search",
-            "Text preprocessing via microservice",
-            "Cached embeddings for fast search",
-            "Batch processing for embeddings"
-        ],
-        "dependencies": {
-            "text_processing_service": query_processor.text_processing_url
-        }
-    }
-
 if __name__ == '__main__':
-    print("🚀 Starting ANTIQUE Query Processing Service v2.0 with FastAPI...")
+    print("🚀 Starting Quora Query Processing Service v1.0 with FastAPI...")
     print("🔍 This service performs similarity search using SQLite + cosine similarity")
-    print("⚡ Features: Cached embeddings + batch processing for ultra-fast search")
-    print("📄 Data source: /Users/raafatmhanna/Downloads/documents.tsv")
-    print("🗄️  Storage: SQLite database + embeddings cache")
-    print("🔗 Service will be available at: http://localhost:5002")
+    print("📄 Data source: /Users/raafatmhanna/Downloads/quora/docs.tsv")
+    print("🔗 Service will be available at: http://localhost:5004")
     print(f"📡 Text processing service: {query_processor.text_processing_url}")
-    print("📖 API docs available at: http://localhost:5002/docs")
-    print("🚀 Performance improvements: Pre-computed embeddings reduce search time from 10s to <1s!")
-    print("⚡ Ready to process queries with lightning speed!")
+    print("📖 API docs available at: http://localhost:5004/docs")
     
-    # Run the service on port 5002
-    uvicorn.run(app, host="0.0.0.0", port=5002)
+    # Run the service on port 5004
+    uvicorn.run(app, host="0.0.0.0", port=5004)

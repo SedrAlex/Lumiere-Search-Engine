@@ -16,6 +16,7 @@ import sqlite3
 import json
 import pickle
 import time
+<<<<<<< HEAD
 import joblib
 from typing import List, Dict, Any, Tuple, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -23,16 +24,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import urllib.parse
+=======
+from typing import List, Dict, Any, Tuple, Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 import uvicorn
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from functools import lru_cache
+<<<<<<< HEAD
 try:
     import faiss
     FAISS_AVAILABLE = True
 except ImportError:
     FAISS_AVAILABLE = False
     print("Warning: FAISS not available. Install with: pip install faiss-cpu")
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 
 # Add the parent directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -44,17 +54,27 @@ logger = logging.getLogger(__name__)
 class AntiqueQueryProcessor:
     """
     Query processing service that uses SQLite database and cosine similarity
+<<<<<<< HEAD
     or FAISS to perform similarity search with top-10 ranked results.
     """
     
     def __init__(self, text_processing_service_url="http://localhost:5001", models_dir="../models", use_faiss=False):
+=======
+    to perform similarity search with top-10 ranked results.
+    """
+    
+    def __init__(self, text_processing_service_url="http://localhost:5001", models_dir="../models"):
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         """
         Initialize the query processor.
         
         Args:
             text_processing_service_url (str): URL of the text processing service
             models_dir (str): Directory containing the models (not used anymore)
+<<<<<<< HEAD
             use_faiss (bool): Whether to use FAISS for similarity search
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         """
         self.text_processing_url = text_processing_service_url
         self.sqlite_db_path = 'antique_documents.db'
@@ -63,6 +83,7 @@ class AntiqueQueryProcessor:
         # Initialize components
         self.model = None
         
+<<<<<<< HEAD
         # FAISS configuration
         self.use_faiss = use_faiss and FAISS_AVAILABLE
         self.faiss_indices_dir = '/Users/raafatmhanna/Downloads/ANTIQUE_FAISS_Index'
@@ -73,6 +94,8 @@ class AntiqueQueryProcessor:
             logger.warning("FAISS requested but not available. Falling back to cosine similarity.")
             self.use_faiss = False
         
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         # Caching and performance improvements
         self.embeddings_cache_path = 'antique_embeddings_cache.pkl'
         self.doc_embeddings = None
@@ -80,6 +103,7 @@ class AntiqueQueryProcessor:
         self.doc_texts_cache = None
         self.cache_timestamp = None
         
+<<<<<<< HEAD
         # Advanced caching for ultra-fast search
         self.query_embedding_cache = {}
         self.similarity_cache = {}
@@ -93,6 +117,10 @@ class AntiqueQueryProcessor:
         # Load FAISS indices if enabled
         if self.use_faiss:
             self.load_faiss_indices()
+=======
+        # Load the model and setup documents
+        self.load_model_and_setup_documents()
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         
     def test_text_processing_service(self):
         """Test if the text processing service is available."""
@@ -277,6 +305,7 @@ class AntiqueQueryProcessor:
             logger.error(f"Error loading and storing documents: {e}")
             raise
 
+<<<<<<< HEAD
     def load_embeddings_from_joblib(self):
         """Load precomputed embeddings from joblib files."""
         try:
@@ -305,6 +334,10 @@ class AntiqueQueryProcessor:
             raise
             
     def load_model_and_setup_documents(self):
+=======
+    def load_model_and_setup_documents(self):
+        """Load the SentenceTransformer model and setup documents in SQLite."""
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         try:
             logger.info("Loading ANTIQUE model and setting up documents...")
             
@@ -418,7 +451,11 @@ class AntiqueQueryProcessor:
             
     def encode_query(self, query: str) -> np.ndarray:
         """
+<<<<<<< HEAD
         Encode a query into an embedding vector with caching.
+=======
+        Encode a query into an embedding vector.
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         
         Args:
             query (str): Query text
@@ -426,6 +463,7 @@ class AntiqueQueryProcessor:
         Returns:
             np.ndarray: Query embedding
         """
+<<<<<<< HEAD
         # Generate cache key
         cache_key = self._get_cache_key(query)
         
@@ -439,10 +477,13 @@ class AntiqueQueryProcessor:
         self.cache_miss_count += 1
         logger.debug(f"Cache miss for query: {query[:50]}...")
         
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         # Process the query using the text processing service
         processed_query = self.call_text_processing_service(query, "query")
         
         # Generate embedding
+<<<<<<< HEAD
         embedding = self.model.encode([processed_query], normalize_embeddings=True)[0]
         
         # Cache the result
@@ -456,16 +497,28 @@ class AntiqueQueryProcessor:
     def search_similar_documents(self, query: str, top_k: int = 10, use_faiss: bool = None) -> List[Dict[str, Any]]:
         """
         Search for similar documents using FAISS (preferred for speed) or cosine similarity.
+=======
+        embedding = self.model.encode([processed_query], normalize_embeddings=True)
+        return embedding[0]
+        
+    def search_similar_documents(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for similar documents using cosine similarity with cached embeddings.
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         
         Args:
             query (str): Search query
             top_k (int): Number of top results to return
+<<<<<<< HEAD
             use_faiss (bool): Whether to use FAISS. If None, uses default setting
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
             
         Returns:
             List[Dict]: List of similar documents with scores
         """
         try:
+<<<<<<< HEAD
             # Check if we have precomputed embeddings
             if self.doc_embeddings is None or self.doc_ids_cache is None:
                 raise ValueError("No precomputed embeddings found. Please check the joblib files.")
@@ -487,10 +540,62 @@ class AntiqueQueryProcessor:
                 logger.info("FAISS not available, falling back to cosine similarity")
                 
             return self._search_with_cosine_similarity(query, top_k)
+=======
+            # Check if we have cached embeddings
+            if self.doc_embeddings is None or self.doc_ids_cache is None:
+                logger.warning("No cached embeddings found. Falling back to real-time encoding...")
+                # Fallback to loading documents from SQLite
+                doc_ids, doc_texts = self.load_documents_from_sqlite()
+                
+                if not doc_ids:
+                    raise ValueError("No documents found in database.")
+                
+                # Encode all documents (this will be slow)
+                logger.info(f"Encoding {len(doc_texts)} documents for similarity search...")
+                doc_embeddings = self.model.encode(doc_texts, normalize_embeddings=True)
+            else:
+                # Use cached embeddings for ultra-fast search
+                logger.info(f"Using cached embeddings for {len(self.doc_ids_cache)} documents")
+                doc_ids = self.doc_ids_cache
+                doc_texts = self.doc_texts_cache
+                doc_embeddings = self.doc_embeddings
+            
+            # Encode the query
+            start_time = time.time()
+            query_embedding = self.encode_query(query)
+            query_time = time.time() - start_time
+            
+            # Calculate cosine similarity
+            start_time = time.time()
+            similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
+            similarity_time = time.time() - start_time
+            
+            # Get top-k results
+            top_indices = np.argsort(similarities)[::-1][:top_k]
+            
+            # Prepare results
+            results = []
+            for i, doc_idx in enumerate(top_indices):
+                doc_id = doc_ids[doc_idx]
+                doc_text = doc_texts[doc_idx]
+                similarity_score = similarities[doc_idx]
+                
+                results.append({
+                    'rank': i + 1,
+                    'doc_id': doc_id,
+                    'document': doc_text,
+                    'similarity_score': float(similarity_score),
+                    'doc_index': int(doc_idx)
+                })
+            
+            logger.info(f"Search completed in {query_time + similarity_time:.3f}s (query: {query_time:.3f}s, similarity: {similarity_time:.3f}s)")
+            return results
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
             
         except Exception as e:
             logger.error(f"Error in similarity search: {e}")
             raise
+<<<<<<< HEAD
     
     def _search_with_cosine_similarity(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
         """
@@ -533,6 +638,8 @@ class AntiqueQueryProcessor:
         
         logger.info(f"Cosine similarity search completed in {query_time + similarity_time:.3f}s (query: {query_time:.3f}s, similarity: {similarity_time:.3f}s)")
         return results
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
             
     def get_document_by_id(self, doc_id: str) -> Dict[str, Any]:
         """
@@ -567,6 +674,7 @@ class AntiqueQueryProcessor:
             logger.error(f"Error getting document by ID: {e}")
             return None
             
+<<<<<<< HEAD
     def load_faiss_indices(self):
         """Load FAISS index from the joblib file."""
         if not FAISS_AVAILABLE:
@@ -656,15 +764,23 @@ class AntiqueQueryProcessor:
         else:
             search_method = "cosine_similarity"
         
+=======
+    def get_service_stats(self) -> Dict[str, Any]:
+        """Get service statistics."""
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         stats = {
             'model_loaded': self.model is not None,
             'database_loaded': os.path.exists(self.sqlite_db_path),
             'text_processing_service_available': self.test_text_processing_service(),
+<<<<<<< HEAD
             'search_method': search_method,
             'faiss_enabled': self.use_faiss,
             'faiss_available': FAISS_AVAILABLE,
             'faiss_indices_count': len(self.faiss_indices),
             'current_faiss_index': self.current_faiss_index,
+=======
+            'search_method': 'cosine_similarity',
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
             'model_name': 'sentence-transformers/all-MiniLM-L6-v2',
             'data_source': self.tsv_file_path
         }
@@ -686,6 +802,7 @@ class AntiqueQueryProcessor:
         return stats
         
     def clear_query_cache(self):
+<<<<<<< HEAD
         """Clear all caches for maximum performance reset."""
         self.call_text_processing_service.cache_clear()
         self.query_embedding_cache.clear()
@@ -764,6 +881,11 @@ class AntiqueQueryProcessor:
             }
         
         return info
+=======
+        """Clear the LRU cache for text processing."""
+        self.call_text_processing_service.cache_clear()
+        logger.info("Query processing cache cleared")
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -781,6 +903,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+<<<<<<< HEAD
 # Custom exception handler for 404 errors
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
@@ -833,12 +956,19 @@ async def not_found_handler(request: Request, exc):
 
 # Initialize the query processor
 query_processor = AntiqueQueryProcessor(use_faiss=True)  # Enable FAISS by default if available
+=======
+# Initialize the query processor
+query_processor = AntiqueQueryProcessor()
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 
 # Pydantic models for request/response
 class SearchRequest(BaseModel):
     query: str
     top_k: Optional[int] = 10
+<<<<<<< HEAD
     use_faiss: Optional[bool] = True  # Default to True if FAISS is available
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 
 class SearchResult(BaseModel):
     rank: int
@@ -853,6 +983,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     total_results: int
 
+<<<<<<< HEAD
 @app.get("/")
 async def root():
     """Root endpoint with service information."""
@@ -875,6 +1006,8 @@ async def root():
         "docs": "http://localhost:5002/docs"
     }
 
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -883,18 +1016,30 @@ async def health_check():
 @app.post("/search", response_model=SearchResponse)
 async def search_documents(request: SearchRequest):
     """
+<<<<<<< HEAD
     Search for similar documents using FAISS index or cosine similarity.
     
     Returns top-k most similar documents based on the query.
     The user can choose between FAISS index (if available) or cosine similarity via the use_faiss parameter.
+=======
+    Search for similar documents using cosine similarity.
+    
+    Returns top-k most similar documents based on the query.
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
     """
     try:
         # Limit top_k to prevent abuse
         top_k = min(request.top_k, 50)
         
+<<<<<<< HEAD
         # Process query and get results with user's choice of search method
         processed_query = query_processor.call_text_processing_service(request.query, "query")
         results = query_processor.search_similar_documents(request.query, top_k, use_faiss=request.use_faiss)
+=======
+        # Process query and get results
+        processed_query = query_processor.call_text_processing_service(request.query, "query")
+        results = query_processor.search_similar_documents(request.query, top_k)
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         
         return {
             "query": request.query,
@@ -907,6 +1052,7 @@ async def search_documents(request: SearchRequest):
         logger.error(f"Error in search: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
+<<<<<<< HEAD
 # Handle malformed search URLs (common issue with trailing spaces)
 @app.post("/search/")
 @app.post("/search ")
@@ -914,6 +1060,8 @@ async def search_documents_with_trailing_slash_or_space(request: SearchRequest):
     """Handle malformed search URLs with trailing slash or space."""
     return await search_documents(request)
 
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 @app.get("/document/{doc_id}")
 async def get_document(doc_id: str):
     """Get a specific document by ID."""
@@ -988,6 +1136,7 @@ async def clear_cache():
         logger.error(f"Error clearing cache: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
+<<<<<<< HEAD
 @app.get("/cache/stats")
 async def cache_stats():
     """Get cache performance statistics."""
@@ -1020,16 +1169,24 @@ async def set_faiss_index(index_name: str):
         logger.error(f"Error setting FAISS index: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to set FAISS index: {str(e)}")
 
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 @app.get("/info")
 async def service_info():
     """Get service information."""
     return {
         "service": "ANTIQUE Query Processing Service",
         "version": "2.0.0",
+<<<<<<< HEAD
         "description": "Online query processing with FAISS index or cosine similarity search using SQLite database",
         "features": [
             "SQLite database storage",
             "FAISS index search",
+=======
+        "description": "Online query processing with cosine similarity search using SQLite database",
+        "features": [
+            "SQLite database storage",
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
             "Cosine similarity search",
             "Text preprocessing via microservice",
             "Cached embeddings for fast search",
@@ -1053,4 +1210,8 @@ if __name__ == '__main__':
     print("⚡ Ready to process queries with lightning speed!")
     
     # Run the service on port 5002
+<<<<<<< HEAD
     uvicorn.run(app, host="0.0.0.0", port=5002)
+=======
+    uvicorn.run(app, host="0.0.0.0", port=5002)
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26

@@ -11,7 +11,11 @@ import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+<<<<<<< HEAD
 from typing import List, Optional
+=======
+from typing import List
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 import uvicorn
 import pandas as pd
 
@@ -23,6 +27,7 @@ class QuoraTextProcessor:
     """
     Text processing service for Quora dataset.
     """
+<<<<<<< HEAD
     
     def __init__(self):
         # Common English stopwords
@@ -46,6 +51,11 @@ class QuoraTextProcessor:
     def safe_clean_text(self, text):
         """
         Ultra-safe cleaning that preserves Quora question format (matching notebook logic)
+=======
+    def safe_clean_text(self, text):
+        """
+        Ultra-safe cleaning that preserves Quora question format.
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         """
         if pd.isna(text) or not isinstance(text, str):
             return ""
@@ -53,6 +63,7 @@ class QuoraTextProcessor:
         # Convert to string to be safe
         text = str(text)
 
+<<<<<<< HEAD
         # Minimal cleaning - preserve most information
         # Remove URLs
         text = re.sub(r'https?://\S+|www\.\S+', '', text)
@@ -104,6 +115,12 @@ class QuoraTextProcessor:
         
         # Remove leading/trailing whitespace
         text = text.strip()
+=======
+        # Remove URLs
+        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 
         return text
 
@@ -112,12 +129,15 @@ class QuoraTextProcessor:
         Process a batch of texts.
         """
         return [self.safe_clean_text(text) for text in texts]
+<<<<<<< HEAD
         
     def process_batch_advanced(self, texts, remove_stopwords=True):
         """
         Process a batch of texts with advanced cleaning.
         """
         return [self.advanced_clean_text(text, remove_stopwords) for text in texts]
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -152,6 +172,7 @@ class TextProcessingResponse(BaseModel):
 class BatchProcessingResponse(BaseModel):
     processed_texts: List[str]
 
+<<<<<<< HEAD
 class QueryProcessingRequest(BaseModel):
     query: str
     remove_stopwords: Optional[bool] = False
@@ -195,6 +216,8 @@ async def process_query(request: QueryProcessingRequest):
         logger.error(f"Error processing query: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
 
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 @app.post("/process", response_model=TextProcessingResponse)
 async def process_text(request: TextProcessingRequest):
     """
@@ -228,6 +251,7 @@ async def process_batch(request: BatchProcessingRequest):
         logger.error(f"Error processing batch: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Batch processing failed: {str(e)}")
 
+<<<<<<< HEAD
 @app.post("/process/advanced", response_model=AdvancedTextProcessingResponse)
 async def process_text_advanced(request: AdvancedTextProcessingRequest):
     """
@@ -261,6 +285,8 @@ async def process_batch_advanced(request: AdvancedBatchProcessingRequest):
         logger.error(f"Error processing batch (advanced): {str(e)}")
         raise HTTPException(status_code=500, detail=f"Advanced batch processing failed: {str(e)}")
 
+=======
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -274,11 +300,16 @@ async def service_info():
         "version": "1.0.0",
         "description": "Text cleaning and preprocessing for Quora embeddings",
         "endpoints": {
+<<<<<<< HEAD
             "/process": "Process single text (basic cleaning)",
             "/process/query": "Process single query (basic cleaning, optional stopword removal)",
             "/process/advanced": "Process single text (advanced cleaning with stopword removal)",
             "/process/batch": "Process multiple texts (basic cleaning)",
             "/process/batch/advanced": "Process multiple texts (advanced cleaning with stopword removal)"
+=======
+            "/process": "Process single text",
+            "/process/batch": "Process multiple texts"
+>>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
         }
     }
 

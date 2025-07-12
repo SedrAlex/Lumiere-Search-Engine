@@ -8,13 +8,74 @@ import os
 import sys
 import requests
 import shutil
-from pathlib import Path
 import joblib
+from pathlib import Path
 import json
+import re
+from typing import List
+from nltk.stem import WordNetLemmatizer, PorterStemmer
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import nltk
 
 # Configuration
 MODEL_DIRECTORY = "/tmp"  # Where to store models
 BACKUP_DIRECTORY = "./models"  # Backup location in current directory
+REQUIRED_FILES = [
+    "tfidf_vectorizer.joblib",
+    "tfidf_matrix.joblib",
+    "document_metadata.joblib"
+]
+
+class EnhancedTokenizer:
+    """Enhanced tokenizer class that matches the one used in training"""
+    def __init__(self, use_spellcheck=True):
+        self.lemmatizer = WordNetLemmatizer()
+        self.stemmer = PorterStemmer()
+        self.stop_words = set(stopwords.words('english'))
+        self.use_spellcheck = use_spellcheck
+        self.spell_checker = None
+
+    def __call__(self, text: str) -> List[str]:
+        """Tokenization pipeline: Lemmatization THEN Stemming"""
+        if not text:
+            return []
+
+        # Basic cleaning
+        text = text.lower()
+        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r'[^a-z0-9\s]', ' ', text)
+
+        # Tokenize
+        tokens = word_tokenize(text)
+        processed_tokens = []
+
+        for token in tokens:
+            if len(token) < 2 or not token.isalnum():
+                continue
+            if token in self.stop_words:
+                continue
+
+            lemmatized = self.lemmatizer.lemmatize(token)
+            stemmed = self.stemmer.stem(lemmatized)
+            processed_tokens.append(stemmed)
+
+        return processed_tokens
+
+def initialize_nltk():
+    """Download required NLTK data"""
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet')
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
 
 def create_directories():
     """Create necessary directories"""
@@ -22,37 +83,17 @@ def create_directories():
     os.makedirs(BACKUP_DIRECTORY, exist_ok=True)
     print(f"✅ Created directories: {MODEL_DIRECTORY}, {BACKUP_DIRECTORY}")
 
-def download_from_url(url: str, filename: str, destination: str):
-    """Download a file from URL"""
-    try:
-        print(f"📥 Downloading {filename}...")
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        
-        filepath = os.path.join(destination, filename)
-        with open(filepath, 'wb') as f:
-            shutil.copyfileobj(response.raw, f)
-        
-        print(f"✅ Downloaded: {filename}")
-        return True
-    except Exception as e:
-        print(f"❌ Failed to download {filename}: {e}")
-        return False
-
-def copy_local_files(source_dir: str, filenames: list):
-    """Copy files from local directory to model directory"""
+def copy_local_files(source_dir: str) -> int:
+    """Copy model files from source directory"""
     success_count = 0
-    
-    for filename in filenames:
+    for filename in REQUIRED_FILES:
         source_path = os.path.join(source_dir, filename)
         dest_path = os.path.join(MODEL_DIRECTORY, filename)
         backup_path = os.path.join(BACKUP_DIRECTORY, filename)
         
         if os.path.exists(source_path):
             try:
-                # Copy to /tmp/
                 shutil.copy2(source_path, dest_path)
-                # Copy to backup location
                 shutil.copy2(source_path, backup_path)
                 print(f"✅ Copied {filename} to {MODEL_DIRECTORY} and {BACKUP_DIRECTORY}")
                 success_count += 1
@@ -60,31 +101,23 @@ def copy_local_files(source_dir: str, filenames: list):
                 print(f"❌ Failed to copy {filename}: {e}")
         else:
             print(f"⚠️  File not found: {source_path}")
-    
     return success_count
 
-def verify_model_files():
+def verify_model_files() -> bool:
     """Verify that all required model files exist and are valid"""
-    required_files = [
-        "antique_enhanced_tfidf_vectorizer.joblib",
-        "antique_enhanced_tfidf_matrix.joblib", 
-        "antique_enhanced_document_metadata.joblib"
-    ]
-    
     print("🔍 Verifying model files...")
-    
     all_valid = True
-    for filename in required_files:
+    
+    for filename in REQUIRED_FILES:
         filepath = os.path.join(MODEL_DIRECTORY, filename)
         
         if os.path.exists(filepath):
             try:
-                # Try to load the file to verify it's valid
-                data = joblib.load(filepath)
-                file_size = os.path.getsize(filepath) / (1024 * 1024)  # MB
+                joblib.load(filepath)
+                file_size = os.path.getsize(filepath) / (1024 * 1024)
                 print(f"✅ {filename}: {file_size:.2f} MB - Valid")
             except Exception as e:
-                print(f"❌ {filename}: Invalid or corrupted - {e}")
+                print(f"❌ {filename}: Invalid - {e}")
                 all_valid = False
         else:
             print(f"❌ {filename}: Not found")
@@ -92,9 +125,9 @@ def verify_model_files():
     
     return all_valid
 
-def update_service_configuration():
-    """Update TF-IDF service to use pre-trained models"""
-    service_file = "services/representation/tfidf_service.py"
+def update_service_configuration() -> bool:
+    """Update TF-IDF service configuration"""
+    service_file = os.path.join("services", "representation", "tfidf_service.py")
     
     if not os.path.exists(service_file):
         print(f"⚠️  Service file not found: {service_file}")
@@ -104,127 +137,62 @@ def update_service_configuration():
         with open(service_file, 'r') as f:
             content = f.read()
         
-        # Update the configuration
         updated_content = content.replace(
             'USE_PRETRAINED_ANTIQUE = False',
             'USE_PRETRAINED_ANTIQUE = True'
         )
         
-        # Ensure paths are correct
-        lines = updated_content.split('\n')
-        for i, line in enumerate(lines):
-            if 'ANTIQUE_MODEL_PATH' in line:
-                lines[i] = f'ANTIQUE_MODEL_PATH = "{MODEL_DIRECTORY}/antique_enhanced_tfidf_vectorizer.joblib"'
-            elif 'ANTIQUE_MATRIX_PATH' in line:
-                lines[i] = f'ANTIQUE_MATRIX_PATH = "{MODEL_DIRECTORY}/antique_enhanced_tfidf_matrix.joblib"'
-            elif 'ANTIQUE_METADATA_PATH' in line:
-                lines[i] = f'ANTIQUE_METADATA_PATH = "{MODEL_DIRECTORY}/antique_enhanced_document_metadata.joblib"'
+        path_updates = {
+            'ANTIQUE_MODEL_PATH': f'"{MODEL_DIRECTORY}/tfidf_vectorizer.joblib"',
+            'ANTIQUE_MATRIX_PATH': f'"{MODEL_DIRECTORY}/tfidf_matrix.joblib"',
+            'ANTIQUE_METADATA_PATH': f'"{MODEL_DIRECTORY}/document_metadata.joblib"'
+        }
         
-        updated_content = '\n'.join(lines)
+        for var, new_value in path_updates.items():
+            updated_content = re.sub(
+                rf'{var}.*=.*".*"',
+                f'{var} = {new_value}',
+                updated_content
+            )
         
-        # Write back to file
         with open(service_file, 'w') as f:
             f.write(updated_content)
         
         print(f"✅ Updated service configuration in {service_file}")
         return True
-        
     except Exception as e:
         print(f"❌ Failed to update service configuration: {e}")
         return False
 
-def show_integration_info():
-    """Show information about how to use the pre-trained models"""
-    print("\n" + "="*60)
-    print("🎉 PRE-TRAINED MODEL SETUP COMPLETE")
-    print("="*60)
-    print(f"""
-📁 Model files location: {MODEL_DIRECTORY}/
-📁 Backup location: {BACKUP_DIRECTORY}/
-
-📋 Files installed:
-   - antique_enhanced_tfidf_vectorizer
-   - antique_enhanced_tfidf_matrix 
-   - antique_enhanced_document_metadata
-
-🚀 Next steps:
-
-1. START THE TF-IDF SERVICE:
-   cd /Users/raafatmhanna/Desktop/custom-search-engine/backend
-   python services/representation/tfidf_service.py
-
-2. TEST WITH POSTMAN:
-   - GET http://localhost:8002/status
-   - Should show: "using_pretrained": true
-
-3. SEARCH EXAMPLES:
-   POST http://localhost:8002/search
-   {{
-     "query": "information retrieval systems",
-     "top_k": 5
-   }}
-
-✅ Benefits:
-   - 400K+ ANTIQUE documents ready for search
-   - No training time required
-   - Production-ready performance
-   - Consistent results across deployments
-
-🔧 If you need to retrain or update models:
-   - Use the enhanced_colab_tfidf_training.py script in Google Colab
-   - Download the new models and run this setup script again
-""")
-
-def main():
+def main() -> bool:
     """Main setup function"""
     print("🚀 Setting up Pre-trained ANTIQUE TF-IDF Models")
     print("="*60)
     
-    # Create directories
+    initialize_nltk()
     create_directories()
     
-    # Option 1: Look for models in current directory (downloaded from Colab)
-    model_files = [
-        "antique_enhanced_tfidf_vectorizer.joblib",
-        "antique_enhanced_tfidf_matrix.joblib",
-        "antique_enhanced_document_metadata.joblib"
-    ]
-    
+    # Try current directory first
     print("\n📂 Looking for model files in current directory...")
-    current_dir_files = copy_local_files(".", model_files)
-    
-    if current_dir_files == 0:
+    if copy_local_files(".") == 0:
         print("\n📂 Looking for model files in Downloads directory...")
-        downloads_dir = os.path.expanduser("~/Downloads")
-        downloads_files = copy_local_files(downloads_dir, model_files)
-        
-        if downloads_files == 0:
+        if copy_local_files(os.path.expanduser("~/Downloads")) == 0:
             print("\n❌ No pre-trained model files found!")
             print("\n📋 TO GET PRE-TRAINED MODELS:")
-            print("1. Open Google Colab")
-            print("2. Upload and run enhanced_colab_tfidf_training.py")
-            print("3. Download the generated .joblib files")
-            print("4. Place them in this directory and run this script again")
-            print("\nAlternatively, you can use the TF-IDF service without pre-trained models")
-            print("by training it with your own documents using the /index endpoint.")
+            print("1. Train models using enhanced_colab_tfidf_training.py in Colab")
+            print("2. Download the generated .joblib files")
+            print("3. Place them in this directory and run this script again")
             return False
     
-    # Verify all files are valid
-    if verify_model_files():
-        print("\n✅ All model files verified successfully!")
-        
-        # Update service configuration
-        if update_service_configuration():
-            show_integration_info()
-            return True
-        else:
-            print("\n⚠️  Models are ready but service configuration update failed.")
-            print("You may need to manually update USE_PRETRAINED_ANTIQUE = True")
-            return False
-    else:
-        print("\n❌ Some model files are missing or invalid!")
+    if not verify_model_files():
+        print("\n❌ Model verification failed!")
         return False
+    
+    if not update_service_configuration():
+        print("\n⚠️  Manual configuration needed: Set USE_PRETRAINED_ANTIQUE = True")
+    
+    print("\n🎉 Setup completed successfully!")
+    return True
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+    sys.exit(0 if main() else 1)

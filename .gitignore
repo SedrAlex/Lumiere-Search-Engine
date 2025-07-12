@@ -2,3 +2,12 @@
 /venv
 /models
 /data
+/services/text_preprocessing/data/database
+/antique_documents.db
+/antique_embeddings_cache.pkl
+/services/query_processing/quora/quora_documents.db
+/services/query_processing/quora/antique_documents.db
+/quora_embeddings_cache.pkl
+/quora_documents.db
+/services/query_processing/quora/quora_embeddings_cache.pkl
+./quora_documents.db

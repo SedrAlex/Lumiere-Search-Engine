@@ -7,7 +7,9 @@
 /antique_embeddings_cache.pkl
 /services/query_processing/quora/quora_documents.db
 /services/query_processing/quora/antique_documents.db
+/services/query_processing/quora/antique_embeddings_cache.pkl
 /quora_embeddings_cache.pkl
 /quora_documents.db
 /services/query_processing/quora/quora_embeddings_cache.pkl
 ./quora_documents.db
+/services/query_processing/quora/quora_embeddings_cache.pkl

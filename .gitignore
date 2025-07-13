@@ -2,8 +2,9 @@
 /venv
 /models
 /data
-<<<<<<< HEAD
-/services/query_processing/quora/antique_documents.db
+
+# Database files
+# /services/query_processing/quora/antique_documents.db
 /services/query_processing/quora/quora_documents.db
 /services/query_processing/quora/quora_embeddings_cache.pkl
 /services/text_preprocessing/data/database/documents.db

@@ -36,18 +36,18 @@ try:
 except LookupError:
     nltk.download('wordnet', quiet=True)
 
-class QuoraTextCleaner:
+class AntiqueTextCleaner:
     """
-    Advanced text cleaning class optimized for Quora question pairs
-    with semantic preservation and question-specific optimizations.
+    Advanced text cleaning class optimized for ANTIQUE documents
+    with semantic preservation and document-specific optimizations.
     """
 
     def __init__(self):
-        # Setup stopwords with exceptions for important question words
+        # Setup stopwords with exceptions for important words
         self.stop_words = set(stopwords.words('english'))
 
-        # Remove question words and semantic indicators that are crucial for Quora
-        question_words = {
+        # Remove important words for ANTIQUE dataset
+        important_words = {
             'what', 'when', 'where', 'why', 'who', 'which', 'how',
             'can', 'could', 'would', 'should', 'will', 'shall',
             'do', 'does', 'did', 'is', 'are', 'was', 'were',
@@ -56,12 +56,12 @@ class QuoraTextCleaner:
             'much', 'many', 'few', 'some', 'any', 'all',
             'best', 'better', 'good', 'bad', 'right', 'wrong'
         }
-        self.stop_words = self.stop_words - question_words
+        self.stop_words = self.stop_words - important_words
 
         # Initialize lemmatizer
         self.lemmatizer = WordNetLemmatizer()
 
-        # Common contractions for question text
+        # Common contractions
         self.contractions = {
             "don't": "do not",
             "won't": "will not",
@@ -80,20 +80,9 @@ class QuoraTextCleaner:
             "how's": "how is"
         }
 
-        # Question patterns that should be normalized
-        self.question_patterns = {
-            r'\bhow do i\b': 'how to',
-            r'\bhow can i\b': 'how to',
-            r'\bhow should i\b': 'how to',
-            r'\bwhat is the best way to\b': 'how to',
-            r'\bwhat are the ways to\b': 'how to',
-            r'\bwhat are some\b': 'what are',
-            r'\bwhat are the\b': 'what are'
-        }
-
     def smart_clean_text(self, text: str) -> str:
         """
-        Enhanced text cleaning optimized for Quora questions.
+        Enhanced text cleaning optimized for ANTIQUE documents.
 
         Args:
             text (str): Input text to clean
@@ -111,20 +100,17 @@ class QuoraTextCleaner:
         for contraction, expansion in self.contractions.items():
             text = text.replace(contraction, expansion)
 
-        # Normalize question patterns
-        for pattern, replacement in self.question_patterns.items():
-            text = re.sub(pattern, replacement, text)
-
         # Remove or normalize specific patterns
-        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', ' URL ', text)
-        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', ' EMAIL ', text)
-        text = re.sub(r'<.*?>', ' ', text)
+        # Possibly retain more in URLs and emails by limiting the replacement
+        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', ' ', text)
+        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', ' ', text)
+        text = re.sub(r'\u003c.*?\u003e', ' ', text)
 
-        # Handle numbers more intelligently for questions
-        text = re.sub(r'\b(19|20)\d{2}\b', ' YEAR ', text)  # Years
-        text = re.sub(r'\b\d+\.\d+\b', ' DECIMAL ', text)  # Decimals
-        text = re.sub(r'\b\d+(?:st|nd|rd|th)\b', ' ORDINAL ', text)  # Ordinals
-        text = re.sub(r'\b\d+\b', ' NUMBER ', text)  # Other numbers
+        # Emphasize keeping numbers by replacing with specific tokens
+        text = re.sub(r'\b(19|20)\d{2}\b', ' ', text)  # Years
+        text = re.sub(r'\b\d+\.\d+\b', ' ', text)  # Decimals
+        text = re.sub(r'\b\d+(?:st|nd|rd|th)\b', ' ', text)  # Ordinals
+        text = re.sub(r'\b\d+\b', ' ', text)  # Other numbers
 
         # Handle emphasis and punctuation
         text = re.sub(r'[!]{2,}', ' EMPHASIS ', text)
@@ -134,7 +120,7 @@ class QuoraTextCleaner:
         # Remove special characters but preserve some important ones
         text = re.sub(r'[^a-zA-Z0-9\s\-_]', ' ', text)
 
-        # Handle hyphenated words carefully (important for compound terms)
+        # Handle hyphenated words carefully
         text = re.sub(r'\b(\w+)-(\w+)\b', r'\1 \2 \1\2', text)  # Keep both forms
 
         # Normalize whitespace
@@ -144,7 +130,7 @@ class QuoraTextCleaner:
 
     def custom_tokenizer(self, text: str) -> List[str]:
         """
-        Custom tokenizer optimized for Quora questions.
+        Custom tokenizer optimized for ANTIQUE documents.
 
         Args:
             text (str): Input text
@@ -162,7 +148,7 @@ class QuoraTextCleaner:
         processed_tokens = []
         for token in tokens:
             # Skip very short tokens or stopwords
-            if len(token) < 2 or token in self.stop_words:
+            if token in self.stop_words:
                 continue
 
             # Skip tokens that are just underscores or dashes
@@ -174,67 +160,115 @@ class QuoraTextCleaner:
             processed_tokens.append(lemmatized)
 
         return processed_tokens
+    
+    def simple_tokenizer(self, text: str) -> List[str]:
+        """
+        Simple tokenizer that preserves more tokens for TF-IDF.
+        
+        Args:
+            text (str): Input text
+        
+        Returns:
+            list: List of processed tokens
+        """
+        if pd.isna(text) or not isinstance(text, str):
+            return []
+        
+        # Basic cleaning - less aggressive
+        text = text.lower().strip()
+        
+        # Expand basic contractions
+        text = re.sub(r"won't", "will not", text)
+        text = re.sub(r"can't", "cannot", text)
+        text = re.sub(r"n't", " not", text)
+        text = re.sub(r"'re", " are", text)
+        text = re.sub(r"'ve", " have", text)
+        text = re.sub(r"'ll", " will", text)
+        text = re.sub(r"'d", " would", text)
+        text = re.sub(r"'m", " am", text)
+        
+        # Remove URLs and emails
+        text = re.sub(r'http[s]?://\S+', '', text)
+        text = re.sub(r'\S+@\S+', '', text)
+        
+        # Remove excessive punctuation but keep some
+        text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+        
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Simple tokenization
+        tokens = text.split()
+        
+        # Minimal filtering - only remove very short tokens and common stopwords
+        basic_stopwords = {'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the', 'to', 'was', 'were', 'will', 'with'}
+        
+        processed_tokens = []
+        for token in tokens:
+            if len(token) >= 2 and token not in basic_stopwords:
+                processed_tokens.append(token)
+        
+        return processed_tokens
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Paths and URLs
-DB_PATH = '/Users/raafatmhanna/Desktop/custom-search-engine/backend/services/query_processing/quora/quora_documents.db'
-TEXT_PROCESSING_SERVICE_URL = "http://localhost:8001"
-TFIDF_VECTORIZER_PATH = '/Users/raafatmhanna/Downloads/quora_tfidf_models/tfidf_vectorizer.joblib'
-TFIDF_MATRIX_PATH = '/Users/raafatmhanna/Downloads/quora_tfidf_models/tfidf_matrix.joblib'
+DB_PATH = '/content/drive/MyDrive/downloads/documents.tsv'
+TEXT_PROCESSING_SERVICE_URL = "http://localhost:5001"
 
 # Initialize text cleaner first
-text_cleaner = QuoraTextCleaner()
+text_cleaner = AntiqueTextCleaner()
 logger.info("Text cleaner initialized.")
 
-# Load models with proper error handling using model_loader
-logger.info("Loading TF-IDF models using model_loader...")
+# Load TF-IDF models (if available)
+logger.info("Loading TF-IDF models...")
 try:
-    from model_loader import load_tfidf_models
-    MODEL_DIR = '/Users/raafatmhanna/Downloads/quora_tfidf_models/'
-    tfidf_vectorizer, tfidf_matrix, inverted_index, tfidf_doc_ids = load_tfidf_models(MODEL_DIR)
-    logger.info(f"TF-IDF models loaded successfully via model_loader")
-    logger.info(f"TF-IDF Matrix shape: {tfidf_matrix.shape}")
-    logger.info(f"TF-IDF Documents: {len(tfidf_doc_ids)}")
-except Exception as e:
-    logger.error(f"Error loading TF-IDF models: {e}")
-    logger.info("Falling back to creating new TF-IDF vectorizer...")
+    # Try to load any existing TF-IDF models for ANTIQUE
+    # Note: You may need to create these models if they don't exist
     from sklearn.feature_extraction.text import TfidfVectorizer
-    # Create a simple fallback vectorizer
+    
+    # Create a TF-IDF vectorizer with the simpler text cleaner
     tfidf_vectorizer = TfidfVectorizer(
-        tokenizer=text_cleaner.custom_tokenizer,
-        lowercase=False,  # Already handled by custom tokenizer
+        tokenizer=text_cleaner.simple_tokenizer,
+        lowercase=False,  # Already handled by simple tokenizer
         max_features=10000,
-        stop_words=None,  # Handled by custom tokenizer
+        stop_words=None,  # Handled by simple tokenizer
         ngram_range=(1, 2)
     )
-    tfidf_matrix = None  # Will be None if we can't load the pre-trained matrix
+    
+    # These will be loaded from the database and processed
+    tfidf_matrix = None
     tfidf_doc_ids = None
     inverted_index = None
-    logger.info("Created fallback TF-IDF vectorizer.")
+    logger.info("Created TF-IDF vectorizer for ANTIQUE documents.")
+except Exception as e:
+    logger.error(f"Error setting up TF-IDF models: {e}")
+    tfidf_vectorizer = None
+    tfidf_matrix = None
+    tfidf_doc_ids = None
+    inverted_index = None
 
-# Initialize Sentence Transformer model for embeddings
+# Initialize Sentence Transformer model for embeddings (using the antique paths)
 logger.info("Loading SentenceTransformer model...")
-sentence_model = SentenceTransformer('/Users/raafatmhanna/Downloads/quora_Embeddings/sentence-transformers_all-MiniLM-L6-v2')
+sentence_model = SentenceTransformer('/content/drive/MyDrive/Antique_Embeddings/sentence-transformers_all-MiniLM-L6-v2')
 logger.info("SentenceTransformer model loaded successfully.")
 
-# Load document embeddings and IDs from database (not from documents_final.joblib)
-logger.info("Loading document embeddings and IDs from database...")
-doc_embeddings = joblib.load('/Users/raafatmhanna/Downloads/quora_Embeddings/doc_embeddings.joblib')
+# Load document embeddings from antique embeddings
+logger.info("Loading document embeddings from antique embeddings...")
+doc_embeddings = joblib.load('/content/drive/MyDrive/Antique_Embeddings/doc_embeddings.joblib')
 logger.info(f"Loaded document embeddings with shape: {doc_embeddings.shape}")
 
 # Load documents and embeddings with proper alignment
-# Use the same documents that were used to create embeddings
 try:
-    documents_path = '/Users/raafatmhanna/Downloads/quora_Embeddings/documents_final.joblib'
+    documents_path = '/content/drive/MyDrive/Antique_Embeddings/documents_final.joblib'
     docs_data = joblib.load(documents_path)
     embedding_doc_ids = docs_data['doc_ids']
     embedding_doc_texts = docs_data['texts']
-    logger.info(f"Loaded {len(embedding_doc_ids)} documents from embeddings joblib file")
+    logger.info(f"Loaded {len(embedding_doc_ids)} documents from antique embeddings joblib file")
 except Exception as e:
-    logger.error(f"Error loading documents from embeddings joblib: {e}")
+    logger.error(f"Error loading documents from antique embeddings joblib: {e}")
     # Fallback to database loading
     def load_documents_from_sqlite():
         """Load documents from SQLite database as fallback."""
@@ -259,6 +293,18 @@ except Exception as e:
     embedding_doc_ids, embedding_doc_texts = load_documents_from_sqlite()
     logger.info(f"Loaded {len(embedding_doc_ids)} documents from database as fallback")
 
+# Create TF-IDF matrix from the documents if not already available
+if tfidf_vectorizer is not None and tfidf_matrix is None:
+    try:
+        logger.info("Creating TF-IDF matrix from documents...")
+        tfidf_matrix = tfidf_vectorizer.fit_transform(embedding_doc_texts)
+        tfidf_doc_ids = embedding_doc_ids
+        logger.info(f"Created TF-IDF matrix with shape: {tfidf_matrix.shape}")
+    except Exception as e:
+        logger.error(f"Error creating TF-IDF matrix: {e}")
+        tfidf_matrix = None
+        tfidf_doc_ids = None
+
 # Create enhanced document alignment and mapping
 logger.info("Creating enhanced document alignment and mapping...")
 
@@ -276,42 +322,40 @@ embedding_id_to_index = {doc_id: idx for idx, doc_id in enumerate(embedding_doc_
 logger.info(f"Created embedding ID to index mapping for {len(embedding_id_to_index)} documents")
 
 # Find common documents between TF-IDF and embeddings
-# Handle type mismatch: TF-IDF uses strings, embeddings use integers
-logger.info("Handling document ID type alignment...")
+logger.info("Handling document ID alignment...")
 
-# Convert TF-IDF doc IDs to integers for comparison
-tfidf_id_to_index_int = {}
-for doc_id_str, idx in tfidf_id_to_index.items():
+# Convert doc IDs to consistent format for comparison
+tfidf_id_to_index_normalized = {}
+for doc_id, idx in tfidf_id_to_index.items():
     try:
-        doc_id_int = int(doc_id_str)
-        tfidf_id_to_index_int[doc_id_int] = idx
-    except ValueError:
-        continue
-
-# Convert embedding doc IDs to integers (they should already be integers)
-embedding_id_to_index_int = {}
-for doc_id, idx in embedding_id_to_index.items():
-    try:
-        doc_id_int = int(doc_id)
-        embedding_id_to_index_int[doc_id_int] = idx
+        normalized_id = str(doc_id)
+        tfidf_id_to_index_normalized[normalized_id] = idx
     except (ValueError, TypeError):
         continue
 
-logger.info(f"TF-IDF integer doc IDs: {len(tfidf_id_to_index_int)}")
-logger.info(f"Embedding integer doc IDs: {len(embedding_id_to_index_int)}")
+embedding_id_to_index_normalized = {}
+for doc_id, idx in embedding_id_to_index.items():
+    try:
+        normalized_id = str(doc_id)
+        embedding_id_to_index_normalized[normalized_id] = idx
+    except (ValueError, TypeError):
+        continue
 
-common_doc_ids = set(tfidf_id_to_index_int.keys()) & set(embedding_id_to_index_int.keys())
+logger.info(f"TF-IDF normalized doc IDs: {len(tfidf_id_to_index_normalized)}")
+logger.info(f"Embedding normalized doc IDs: {len(embedding_id_to_index_normalized)}")
+
+common_doc_ids = set(tfidf_id_to_index_normalized.keys()) & set(embedding_id_to_index_normalized.keys())
 logger.info(f"Found {len(common_doc_ids)} common documents between TF-IDF and embeddings")
 
 # Create unified document mapping for hybrid search
 if common_doc_ids:
     # Use common documents for best hybrid performance
     unified_doc_ids = list(common_doc_ids)
-    unified_doc_texts = [embedding_doc_texts[embedding_id_to_index_int[doc_id]] for doc_id in unified_doc_ids]
+    unified_doc_texts = [embedding_doc_texts[embedding_id_to_index_normalized[doc_id]] for doc_id in unified_doc_ids]
     logger.info(f"Using {len(unified_doc_ids)} common documents for hybrid search")
 else:
     # Fallback to embedding documents if no common documents found
-    unified_doc_ids = embedding_doc_ids
+    unified_doc_ids = [str(doc_id) for doc_id in embedding_doc_ids]
     unified_doc_texts = embedding_doc_texts
     logger.warning("No common documents found - using embedding documents only")
 
@@ -321,8 +365,8 @@ final_doc_texts = unified_doc_texts
 
 # Create unified ID to index mappings for search functions
 final_id_to_index = {doc_id: idx for idx, doc_id in enumerate(final_doc_ids)}
-final_id_to_tfidf_index = {doc_id: tfidf_id_to_index_int.get(doc_id) for doc_id in final_doc_ids if doc_id in tfidf_id_to_index_int}
-final_id_to_embedding_index = {doc_id: embedding_id_to_index_int.get(doc_id) for doc_id in final_doc_ids if doc_id in embedding_id_to_index_int}
+final_id_to_tfidf_index = {doc_id: tfidf_id_to_index_normalized.get(doc_id) for doc_id in final_doc_ids if doc_id in tfidf_id_to_index_normalized}
+final_id_to_embedding_index = {doc_id: embedding_id_to_index_normalized.get(doc_id) for doc_id in final_doc_ids if doc_id in embedding_id_to_index_normalized}
 
 logger.info(f"Final document count: {len(final_doc_ids)}")
 logger.info(f"TF-IDF availability: {tfidf_matrix is not None}")
@@ -330,8 +374,8 @@ logger.info(f"Embeddings availability: {doc_embeddings is not None}")
 
 # FastAPI app
 app = FastAPI(
-    title="Hybrid Quora Query Processing Service",
-    description="Query processing using TF-IDF and Embeddings with Fusion",
+    title="Hybrid ANTIQUE Query Processing Service",
+    description="Query processing using TF-IDF and Embeddings with Fusion for ANTIQUE dataset",
     version="1.0.0"
 )
 
@@ -398,15 +442,15 @@ async def process_hybrid_query(request: QueryRequest):
                     # Return minimal scores for all documents to ensure hybrid fusion works
                     minimal_scores = np.full(len(tfidf_doc_ids), 0.001)
                     results = []
-                    for idx, doc_id_str in enumerate(tfidf_doc_ids[:top_k*2]):
+                    for idx, doc_id in enumerate(tfidf_doc_ids[:top_k*2]):
                         try:
-                            doc_id_int = int(doc_id_str)
-                            if doc_id_int in final_id_to_index:
+                            doc_id_str = str(doc_id)
+                            if doc_id_str in final_id_to_index:
                                 results.append({
-                                    "doc_id": doc_id_int,
+                                    "doc_id": doc_id_str,
                                     "score": float(minimal_scores[idx]),
-                                    "processed_text": final_doc_texts[final_id_to_index[doc_id_int]],
-                                    "doc_index": final_id_to_index[doc_id_int]
+                                    "processed_text": final_doc_texts[final_id_to_index[doc_id_str]],
+                                    "doc_index": final_id_to_index[doc_id_str]
                                 })
                         except (ValueError, KeyError):
                             continue
@@ -429,18 +473,19 @@ async def process_hybrid_query(request: QueryRequest):
                 results = []
                 for tfidf_idx in top_indices:
                     # Convert TF-IDF matrix index to document ID
-                    doc_id_str = tfidf_doc_ids[tfidf_idx]
-                    try:
-                        doc_id_int = int(doc_id_str)
-                        if doc_id_int in final_id_to_index:  # Only include documents that are in our unified set
-                            results.append({
-                                "doc_id": doc_id_int,
-                                "score": float(cosine_similarities[tfidf_idx]),
-                                "processed_text": final_doc_texts[final_id_to_index[doc_id_int]],
-                                "doc_index": final_id_to_index[doc_id_int]
-                            })
-                    except (ValueError, KeyError):
-                        continue
+                    doc_id = tfidf_doc_ids[tfidf_idx]
+                    doc_id_str = str(doc_id)
+                    
+                    if doc_id_str in final_id_to_index:  # Only include documents that are in our unified set
+                        result_score = float(cosine_similarities[tfidf_idx])
+                        if result_score == 0:
+                            logger.debug(f"Zero score for doc_id {doc_id_str} - check for query transformations")
+                        results.append({
+                            "doc_id": doc_id_str,
+                            "score": result_score,
+                            "processed_text": final_doc_texts[final_id_to_index[doc_id_str]],
+                            "doc_index": final_id_to_index[doc_id_str]
+                        })
                 
                 logger.info(f"TF-IDF calculated {len(results)} results")
                 return results
@@ -474,14 +519,14 @@ async def process_hybrid_query(request: QueryRequest):
                     if cosine_similarities[embedding_idx] > 0:
                         # Convert embedding matrix index to document ID
                         doc_id = embedding_doc_ids[embedding_idx]
-                        doc_id_int = int(doc_id) if not isinstance(doc_id, int) else doc_id
+                        doc_id_str = str(doc_id)
                         
-                        if doc_id_int in final_id_to_index:  # Only include documents that are in our unified set
+                        if doc_id_str in final_id_to_index:  # Only include documents that are in our unified set
                             results.append({
-                                "doc_id": doc_id_int,
+                                "doc_id": doc_id_str,
                                 "similarity_score": float(cosine_similarities[embedding_idx]),
-                                "document": final_doc_texts[final_id_to_index[doc_id_int]],
-                                "doc_index": final_id_to_index[doc_id_int]
+                                "document": final_doc_texts[final_id_to_index[doc_id_str]],
+                                "doc_index": final_id_to_index[doc_id_str]
                             })
                 
                 logger.info(f"Embeddings calculated {len(results)} results")
@@ -498,6 +543,7 @@ async def process_hybrid_query(request: QueryRequest):
             tfidf_results = tfidf_future.result()
             embedding_results = embedding_future.result()
         logger.info(f"Parallel execution completed. TF-IDF: {len(tfidf_results)} results, Embedding: {len(embedding_results)} results")
+        
         # If both services failed, return error
         if not tfidf_results and not embedding_results:
             raise HTTPException(status_code=500, detail="Both TF-IDF and Embedding services are unavailable")
@@ -518,7 +564,6 @@ async def process_hybrid_query(request: QueryRequest):
                         "embedding_score": embedding_score,
                         "doc_index": int(result.get("doc_index", 0))
                     })
-            cleaned_query = text_cleaner.smart_clean_text(query)
             return {
                 "query": query,
                 "cleaned_query": cleaned_query,
@@ -542,7 +587,6 @@ async def process_hybrid_query(request: QueryRequest):
                         "embedding_score": 0.0,
                         "doc_index": int(result.get("doc_index", 0))
                     })
-            cleaned_query = text_cleaner.smart_clean_text(query)
             return {
                 "query": query,
                 "cleaned_query": cleaned_query,
@@ -667,5 +711,4 @@ async def process_hybrid_query(request: QueryRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8005)
-
+    uvicorn.run(app, host="0.0.0.0", port=8006)

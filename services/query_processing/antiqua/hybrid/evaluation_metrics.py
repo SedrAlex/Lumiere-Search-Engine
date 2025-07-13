@@ -15,16 +15,16 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class QuoraEvaluator:
+class AntiqueEvaluator:
     """
-    Comprehensive evaluation class for Quora hybrid search system.
+    Comprehensive evaluation class for ANTIQUE hybrid search system.
     Calculates MAP, MRR, and Precision@K metrics.
     """
     
     def __init__(self, 
-                 queries_file: str = "/Users/raafatmhanna/Downloads/quora/queries.tsv",
-                 qrels_file: str = "/Users/raafatmhanna/Downloads/quora/qrels.tsv",
-                 service_url: str = "http://localhost:8005"):
+                 queries_file: str = "/content/drive/MyDrive/downloads/queries.tsv",
+                 qrels_file: str = "/content/drive/MyDrive/downloads/qrels.tsv",
+                 service_url: str = "http://localhost:8006"):
         """
         Initialize the evaluator.
         
@@ -169,6 +169,34 @@ class QuoraEvaluator:
         
         return 0.0
     
+    def calculate_ndcg_at_k(self, retrieved_docs: List[int], relevant_docs: Set[int], k: int) -> float:
+        """
+        Calculate NDCG@K for binary relevance.
+        
+        Args:
+            retrieved_docs: List of retrieved document IDs (in rank order)
+            relevant_docs: Set of relevant document IDs
+            k: Cut-off rank
+            
+        Returns:
+            NDCG@K value
+        """
+        if k == 0 or len(retrieved_docs) == 0 or len(relevant_docs) == 0:
+            return 0.0
+        
+        # Calculate DCG@K
+        dcg = 0.0
+        for i, doc_id in enumerate(retrieved_docs[:k]):
+            if doc_id in relevant_docs:
+                dcg += 1.0 / np.log2(i + 2)  # +2 because log2(1) = 0
+        
+        # Calculate IDCG@K (ideal DCG)
+        idcg = 0.0
+        for i in range(min(k, len(relevant_docs))):
+            idcg += 1.0 / np.log2(i + 2)
+        
+        return dcg / idcg if idcg > 0 else 0.0
+    
     def evaluate_single_query(self, query_id: int, top_k: int = 100) -> Dict:
         """
         Evaluate a single query.
@@ -206,7 +234,11 @@ class QuoraEvaluator:
                 'p_at_1': 0.0,
                 'p_at_5': 0.0,
                 'p_at_10': 0.0,
-                'p_at_20': 0.0
+                'p_at_20': 0.0,
+                'ndcg_at_1': 0.0,
+                'ndcg_at_5': 0.0,
+                'ndcg_at_10': 0.0,
+                'ndcg_at_20': 0.0
             }
         
         # Extract document IDs from results
@@ -219,6 +251,10 @@ class QuoraEvaluator:
         p_at_5 = self.calculate_precision_at_k(retrieved_docs, relevant_docs, 5)
         p_at_10 = self.calculate_precision_at_k(retrieved_docs, relevant_docs, 10)
         p_at_20 = self.calculate_precision_at_k(retrieved_docs, relevant_docs, 20)
+        ndcg_at_1 = self.calculate_ndcg_at_k(retrieved_docs, relevant_docs, 1)
+        ndcg_at_5 = self.calculate_ndcg_at_k(retrieved_docs, relevant_docs, 5)
+        ndcg_at_10 = self.calculate_ndcg_at_k(retrieved_docs, relevant_docs, 10)
+        ndcg_at_20 = self.calculate_ndcg_at_k(retrieved_docs, relevant_docs, 20)
         
         return {
             'query_id': query_id,
@@ -230,7 +266,11 @@ class QuoraEvaluator:
             'p_at_1': p_at_1,
             'p_at_5': p_at_5,
             'p_at_10': p_at_10,
-            'p_at_20': p_at_20
+            'p_at_20': p_at_20,
+            'ndcg_at_1': ndcg_at_1,
+            'ndcg_at_5': ndcg_at_5,
+            'ndcg_at_10': ndcg_at_10,
+            'ndcg_at_20': ndcg_at_20
         }
     
     def evaluate_all_queries(self, max_queries: int = None, top_k: int = 100, 
@@ -296,6 +336,10 @@ class QuoraEvaluator:
         mean_p_at_5 = np.mean([r['p_at_5'] for r in results])
         mean_p_at_10 = np.mean([r['p_at_10'] for r in results])
         mean_p_at_20 = np.mean([r['p_at_20'] for r in results])
+        mean_ndcg_at_1 = np.mean([r['ndcg_at_1'] for r in results])
+        mean_ndcg_at_5 = np.mean([r['ndcg_at_5'] for r in results])
+        mean_ndcg_at_10 = np.mean([r['ndcg_at_10'] for r in results])
+        mean_ndcg_at_20 = np.mean([r['ndcg_at_20'] for r in results])
         
         # Calculate additional statistics
         total_relevant = sum([r['num_relevant'] for r in results])
@@ -317,7 +361,11 @@ class QuoraEvaluator:
                 'Mean_P@1': mean_p_at_1,
                 'Mean_P@5': mean_p_at_5,
                 'Mean_P@10': mean_p_at_10,
-                'Mean_P@20': mean_p_at_20
+                'Mean_P@20': mean_p_at_20,
+                'Mean_NDCG@1': mean_ndcg_at_1,
+                'Mean_NDCG@5': mean_ndcg_at_5,
+                'Mean_NDCG@10': mean_ndcg_at_10,
+                'Mean_NDCG@20': mean_ndcg_at_20
             },
             'per_query_results': results
         }
@@ -354,7 +402,7 @@ class QuoraEvaluator:
         metrics = results['aggregate_metrics']
         
         print("\n" + "="*60)
-        print("QUORA HYBRID SEARCH EVALUATION RESULTS")
+        print("ANTIQUE HYBRID SEARCH EVALUATION RESULTS")
         print("="*60)
         
         print(f"\nEvaluation Summary:")
@@ -372,6 +420,10 @@ class QuoraEvaluator:
         print(f"  Mean P@5: {metrics['Mean_P@5']:.4f}")
         print(f"  Mean P@10: {metrics['Mean_P@10']:.4f}")
         print(f"  Mean P@20: {metrics['Mean_P@20']:.4f}")
+        print(f"  Mean NDCG@1: {metrics['Mean_NDCG@1']:.4f}")
+        print(f"  Mean NDCG@5: {metrics['Mean_NDCG@5']:.4f}")
+        print(f"  Mean NDCG@10: {metrics['Mean_NDCG@10']:.4f}")
+        print(f"  Mean NDCG@20: {metrics['Mean_NDCG@20']:.4f}")
         
         print("\n" + "="*60)
 
@@ -379,7 +431,7 @@ def main():
     """Main evaluation function."""
     
     # Initialize evaluator
-    evaluator = QuoraEvaluator()
+    evaluator = AntiqueEvaluator()
     
     # Check if service is running
     try:
@@ -411,7 +463,7 @@ def main():
         evaluator.print_summary(results)
         
         # Save results
-        output_file = f"evaluation_results_{int(time.time())}.json"
+        output_file = f"antique_evaluation_results_{int(time.time())}.json"
         evaluator.save_results(results, output_file)
         
         print(f"\nEvaluation completed in {evaluation_time:.2f} seconds")

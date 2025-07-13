@@ -178,7 +178,7 @@ class QuoraTextCleaner:
 
         return processed_tokens
 
-def load_tfidf_models(model_dir='/content/drive/MyDrive/quora_tfidf_models/'):
+def load_tfidf_models(model_dir='/Users/raafatmhanna/Downloads/quora_tfidf_models/'):
     """
     Load TF-IDF models with proper QuoraTextCleaner context.
     

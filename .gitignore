@@ -4,27 +4,17 @@
 /data
 
 # Database files
-# /services/query_processing/quora/antique_documents.db
+/services/query_processing/quora/antique_documents.db
 /services/query_processing/quora/quora_documents.db
-/services/query_processing/quora/quora_embeddings_cache.pkl
+/services/query_processing/quora/quora_documents.db-journal
 /services/text_preprocessing/data/database/documents.db
-/antique_documents.db
-/antique_embeddings_cache.pkl
-/quora_documents.db
-=======
 /services/text_preprocessing/data/database
 /antique_documents.db
-/antique_embeddings_cache.pkl
-/services/query_processing/quora/quora_documents.db
-<<<<<<< HEAD
-/services/query_processing/quora/antique_documents.db
-/services/query_processing/quora/antique_embeddings_cache.pkl
-/quora_embeddings_cache.pkl
 /quora_documents.db
+
+# Cache files
 /services/query_processing/quora/quora_embeddings_cache.pkl
-./quora_documents.db
-/services/query_processing/quora/quora_embeddings_cache.pkl
-=======
-/services/query_processing/quora/quora_documents.db-journal
->>>>>>> 7c102ff9d25d5005389fdc2c7f22c8d862d68e26
->>>>>>> cf8aeec1afd46d7be8ad17f59e62bc9d5ccdd7cc
+/services/query_processing/quora/antique_embeddings_cache.pkl
+/antique_embeddings_cache.pkl
+/quora_embeddings_cache.pkl
+/services/query_processing/antiqua/antique_documents.db

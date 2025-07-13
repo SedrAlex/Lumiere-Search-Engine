@@ -9,9 +9,12 @@ import sys
 import logging
 import json
 import time
+import sqlite3
+import numpy as np
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
+from sentence_transformers import SentenceTransformer
 
 # Add the parent directory to the path to import the embedding service
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -99,10 +102,15 @@ class QuoraRAGService:
         """Initialize the retrieval component using existing embedding service."""
         try:
             logger.info("Initializing retrieval component...")
+            # Initialize with database-based approach instead of joblib files
             self.retrieval_processor = QuoraQueryProcessor(
                 text_processing_service_url="http://localhost:5003",
                 use_faiss=True  # Use FAISS for faster retrieval
             )
+            
+            # Override the joblib loading to use database instead
+            self._load_embeddings_from_database()
+            
             logger.info("Retrieval component initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize retrieval component: {e}")
@@ -175,6 +183,112 @@ class QuoraRAGService:
             self.tokenizer = None
             self.model = None
             logger.warning("Falling back to template-based generation")
+    
+    def _load_embeddings_from_database(self):
+        """Load embeddings from database instead of joblib files."""
+        try:
+            logger.info("Loading embeddings from Quora database...")
+            
+            # Load documents from SQLite database
+            sqlite_db_path = '/Users/raafatmhanna/Desktop/custom-search-engine/backend/services/query_processing/quora/quora_documents.db'
+            
+            if not os.path.exists(sqlite_db_path):
+                raise FileNotFoundError(f"Quora database not found at {sqlite_db_path}")
+            
+            conn = sqlite3.connect(sqlite_db_path)
+            cursor = conn.cursor()
+            
+            # Get all documents with processed text
+            cursor.execute('SELECT doc_id, processed_text FROM documents WHERE processed_text IS NOT NULL')
+            rows = cursor.fetchall()
+            conn.close()
+            
+            if not rows:
+                raise ValueError("No documents found in Quora database")
+            
+            # Extract document IDs and texts
+            doc_ids = [row[0] for row in rows]
+            doc_texts = [row[1] for row in rows]
+            
+            logger.info(f"Loaded {len(doc_ids)} documents from Quora database")
+            
+            # Load the SentenceTransformer model for encoding
+            model_path = '/Users/raafatmhanna/Downloads/quora_Embeddings/sentence-transformers_all-MiniLM-L6-v2'
+            if os.path.exists(model_path):
+                model = SentenceTransformer(model_path)
+                logger.info("SentenceTransformer model loaded successfully from local path.")
+            else:
+                logger.warning("Local model not found, loading from HuggingFace...")
+                model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                logger.info("SentenceTransformer model loaded from HuggingFace.")
+            
+            # Check if we need to compute embeddings
+            embeddings_cache_path = '/Users/raafatmhanna/Desktop/custom-search-engine/backend/services/query_processing/quora/quora_embeddings_cache.pkl'
+            
+            if os.path.exists(embeddings_cache_path):
+                logger.info("Loading cached embeddings...")
+                import pickle
+                with open(embeddings_cache_path, 'rb') as f:
+                    cache_data = pickle.load(f)
+                
+                # Verify cache is valid
+                if (len(cache_data.get('doc_ids', [])) == len(doc_ids) and
+                    cache_data.get('doc_ids') == doc_ids):
+                    doc_embeddings = cache_data['doc_embeddings']
+                    logger.info(f"Using cached embeddings for {len(doc_ids)} documents")
+                else:
+                    logger.info("Cache invalid, computing new embeddings...")
+                    doc_embeddings = self._compute_embeddings(model, doc_texts)
+                    self._save_embeddings_cache(doc_ids, doc_texts, doc_embeddings, embeddings_cache_path)
+            else:
+                logger.info("No cache found, computing embeddings...")
+                doc_embeddings = self._compute_embeddings(model, doc_texts)
+                self._save_embeddings_cache(doc_ids, doc_texts, doc_embeddings, embeddings_cache_path)
+            
+            # Set the data in the processor
+            self.retrieval_processor.doc_ids_cache = doc_ids
+            self.retrieval_processor.doc_texts_cache = doc_texts
+            self.retrieval_processor.doc_embeddings = doc_embeddings
+            self.retrieval_processor.model = model
+            
+            logger.info(f"Successfully loaded {len(doc_ids)} documents from Quora database")
+            
+        except Exception as e:
+            logger.error(f"Error loading embeddings from database: {e}")
+            raise
+    
+    def _compute_embeddings(self, model, doc_texts):
+        """Compute embeddings for document texts."""
+        logger.info(f"Computing embeddings for {len(doc_texts)} documents...")
+        
+        # Compute embeddings in batches
+        batch_size = 100
+        all_embeddings = []
+        
+        for i in range(0, len(doc_texts), batch_size):
+            batch_texts = doc_texts[i:i+batch_size]
+            batch_embeddings = model.encode(batch_texts, normalize_embeddings=True, show_progress_bar=True)
+            all_embeddings.extend(batch_embeddings)
+            
+            logger.info(f"Processed batch {i//batch_size + 1}/{(len(doc_texts) + batch_size - 1)//batch_size}")
+        
+        return np.array(all_embeddings)
+    
+    def _save_embeddings_cache(self, doc_ids, doc_texts, doc_embeddings, cache_path):
+        """Save embeddings to cache file."""
+        try:
+            import pickle
+            cache_data = {
+                'doc_ids': doc_ids,
+                'doc_texts': doc_texts,
+                'doc_embeddings': doc_embeddings,
+                'timestamp': time.time()
+            }
+            with open(cache_path, 'wb') as f:
+                pickle.dump(cache_data, f)
+            logger.info(f"Embeddings cache saved to {cache_path}")
+        except Exception as e:
+            logger.error(f"Error saving embeddings cache: {e}")
     
     def _clean_conversations(self):
         """Remove expired conversations."""

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FastAPI Web Application for Information Retrieval System
-Provides REST API endpoints for testing with Postman
+FastAPI Web Application for Search Engine with SOA Architecture
+Main endpoint service that handles all search requests
 """
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -13,38 +13,30 @@ import logging
 import numpy as np
 from contextlib import asynccontextmanager
 
-from ir_system import IRSystem
+from services.search_service import SearchService
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global IR System instance
-ir_system = None
-# Global Document Representation System
-doc_repr_system = None
-# Datasets loading status
-datasets_status = {}
+# Global Search Service instance
+search_service = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize systems on startup without loading datasets"""
-    global ir_system, doc_repr_system
-    logger.info("Initializing IR System...")
+    """Initialize search service on startup"""
+    global search_service
+    logger.info("Initializing Search Service...")
     
-    # Initialize systems but don't load datasets automatically
-    ir_system = IRSystem()
+    # Initialize search service
+    search_service = SearchService()
     
-    # Import and initialize document representation system
-    from document_representations import DocumentRepresentationSystem
-    doc_repr_system = DocumentRepresentationSystem()
-    
-    logger.info("IR System ready - datasets can be loaded on demand")
+    logger.info("Search Service ready - datasets can be loaded on demand")
     
     yield
     
     # Cleanup
-    logger.info("Shutting down IR System...")
+    logger.info("Shutting down Search Service...")
 
 # Create FastAPI app
 app = FastAPI(
@@ -66,31 +58,18 @@ app.add_middleware(
 # Request/Response Models
 class SearchRequest(BaseModel):
     query: str
-    dataset: str = "antique"  # antique or codesearchnet
-    method: str = "bm25"      # bm25 or tfidf
+    dataset: str = "quora"  # quora or antique
+    method: str = "hybrid-quora"  # tfidf, embedding, hybrid-quora, hybrid-antique
     top_k: int = 10
+    use_faiss: bool = False
 
-class EvaluationRequest(BaseModel):
-    query_id: str
-    dataset: str = "antique"
-    method: str = "bm25"
-    top_k: int = 10
+class DatasetLoadRequest(BaseModel):
+    dataset_name: str = "quora"  # quora or antique
+    use_faiss: bool = False
 
 class PreprocessingRequest(BaseModel):
     text: str
-    use_stemming: bool = True
-    use_lemmatization: bool = False
-
-class DatasetLoadRequest(BaseModel):
-    dataset_name: str = "antique"  # antique or codesearchnet
-    representation_types: List[str] = ["tfidf", "embedding", "hybrid"]
-    max_documents: Optional[int] = None  # Limit for testing
-
-class RepresentationRequest(BaseModel):
-    query: str
-    dataset: str = "antique"
-    representation_type: str = "tfidf"  # tfidf, embedding, hybrid
-    top_k: int = 10
+    dataset: str = "quora"  # quora or antique
 
 # API Endpoints
 
@@ -98,20 +77,26 @@ class RepresentationRequest(BaseModel):
 async def root():
     """Root endpoint with API information"""
     return {
-        "message": "Information Retrieval System API",
-        "version": "1.0.0",
-        "datasets": ["antique", "codesearchnet"],
-        "methods": ["bm25", "tfidf"],
+        "message": "Search Engine API with SOA Architecture",
+        "version": "2.0.0",
+        "datasets": ["quora", "antique"],
+        "methods": ["tfidf", "embedding", "hybrid-quora", "hybrid-antique"],
         "endpoints": {
             "GET /": "API information",
             "GET /health": "Health check",
             "GET /datasets": "Dataset information",
             "GET /datasets/{dataset_name}": "Specific dataset info",
+            "POST /datasets/load": "Load dataset",
             "POST /search": "Search documents",
-            "POST /evaluate": "Evaluate query with ground truth",
             "POST /preprocess": "Test text preprocessing",
-            "GET /queries/{dataset_name}": "Get sample queries",
-            "GET /sample-data/{dataset_name}": "Get sample documents"
+            "GET /faiss/status": "FAISS availability status"
+        },
+        "architecture": "Service-Oriented Architecture (SOA)",
+        "services": {
+            "search_service": "Main search coordination",
+            "embedding_service": "Vector operations with FAISS support",
+            "text_processor": "Text preprocessing and TF-IDF",
+            "database_service": "Data management"
         }
     }
 

@@ -1,0 +1,946 @@
+{
+  "info": {
+    "name": "Custom Search Engine API Collection",
+    "description": "Complete collection of all endpoints for the Custom Search Engine with SOA Architecture",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "embedding_service_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "text_processor_url",
+      "value": "http://localhost:8002",
+      "type": "string"
+    },
+    {
+      "key": "antique_embedding_url",
+      "value": "http://localhost:5002",
+      "type": "string"
+    },
+    {
+      "key": "antique_hybrid_url",
+      "value": "http://localhost:8006",
+      "type": "string"
+    },
+    {
+      "key": "antique_tfidf_url",
+      "value": "http://localhost:8009",
+      "type": "string"
+    },
+    {
+      "key": "antique_rag_url",
+      "value": "http://localhost:8002",
+      "type": "string"
+    },
+    {
+      "key": "quora_rag_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Main API Service (Port 8000)",
+      "item": [
+        {
+          "name": "Root - API Information",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Datasets Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/datasets",
+              "host": ["{{base_url}}"],
+              "path": ["datasets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specific Dataset Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/datasets/quora",
+              "host": ["{{base_url}}"],
+              "path": ["datasets", "quora"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Load Dataset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset_name\": \"quora\",\n  \"use_faiss\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/datasets/load",
+              "host": ["{{base_url}}"],
+              "path": ["datasets", "load"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is machine learning?\",\n  \"dataset\": \"quora\",\n  \"method\": \"hybrid-quora\",\n  \"top_k\": 10,\n  \"use_faiss\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/search",
+              "host": ["{{base_url}}"],
+              "path": ["search"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Text Preprocessing Test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"What is machine learning and how does it work?\",\n  \"dataset\": \"quora\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/preprocess",
+              "host": ["{{base_url}}"],
+              "path": ["preprocess"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "FAISS Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/faiss/status",
+              "host": ["{{base_url}}"],
+              "path": ["faiss", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Sample Queries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/queries/quora?limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["queries", "quora"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Sample Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sample-data/quora?limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["sample-data", "quora"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Services Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/services/status",
+              "host": ["{{base_url}}"],
+              "path": ["services", "status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Embedding Service (Port 8001)",
+      "item": [
+        {
+          "name": "Embedding Service Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{embedding_service_url}}/",
+              "host": ["{{embedding_service_url}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Embedding Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{embedding_service_url}}/health",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Loaded Datasets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{embedding_service_url}}/datasets",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["datasets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dataset Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{embedding_service_url}}/datasets/quora",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["datasets", "quora"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Load Dataset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset_name\": \"quora\",\n  \"embedding_model_path\": \"/path/to/model\",\n  \"embeddings_path\": \"/path/to/embeddings\",\n  \"documents_path\": \"/path/to/documents\",\n  \"use_faiss\": false\n}"
+            },
+            "url": {
+              "raw": "{{embedding_service_url}}/datasets/load",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["datasets", "load"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Embeddings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is machine learning?\",\n  \"dataset\": \"quora\",\n  \"top_k\": 10,\n  \"use_faiss\": false\n}"
+            },
+            "url": {
+              "raw": "{{embedding_service_url}}/search",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["search"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reload Dataset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"quora\",\n  \"use_faiss\": true\n}"
+            },
+            "url": {
+              "raw": "{{embedding_service_url}}/datasets/reload",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["datasets", "reload"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "FAISS Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{embedding_service_url}}/faiss/status",
+              "host": ["{{embedding_service_url}}"],
+              "path": ["faiss", "status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Text Processing Service (Port 8002)",
+      "item": [
+        {
+          "name": "Text Processing Service Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{text_processor_url}}/",
+              "host": ["{{text_processor_url}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Text Processing Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{text_processor_url}}/health",
+              "host": ["{{text_processor_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Loaded Datasets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{text_processor_url}}/datasets",
+              "host": ["{{text_processor_url}}"],
+              "path": ["datasets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dataset Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{text_processor_url}}/datasets/quora",
+              "host": ["{{text_processor_url}}"],
+              "path": ["datasets", "quora"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Load TF-IDF Models",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset_name\": \"quora\",\n  \"model_path\": \"/path/to/tfidf/models\"\n}"
+            },
+            "url": {
+              "raw": "{{text_processor_url}}/tfidf/load",
+              "host": ["{{text_processor_url}}"],
+              "path": ["tfidf", "load"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Clean Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"What is machine learning and how does it work?\",\n  \"dataset\": \"quora\"\n}"
+            },
+            "url": {
+              "raw": "{{text_processor_url}}/text/clean",
+              "host": ["{{text_processor_url}}"],
+              "path": ["text", "clean"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tokenize Text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"What is machine learning and how does it work?\",\n  \"dataset\": \"quora\"\n}"
+            },
+            "url": {
+              "raw": "{{text_processor_url}}/text/tokenize",
+              "host": ["{{text_processor_url}}"],
+              "path": ["text", "tokenize"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search TF-IDF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is machine learning?\",\n  \"dataset\": \"quora\",\n  \"top_k\": 10\n}"
+            },
+            "url": {
+              "raw": "{{text_processor_url}}/tfidf/search",
+              "host": ["{{text_processor_url}}"],
+              "path": ["tfidf", "search"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fit TF-IDF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documents\": [\"This is a sample document\", \"Another document for testing\"],\n  \"dataset\": \"quora\",\n  \"doc_ids\": [\"doc1\", \"doc2\"]\n}"
+            },
+            "url": {
+              "raw": "{{text_processor_url}}/tfidf/fit",
+              "host": ["{{text_processor_url}}"],
+              "path": ["tfidf", "fit"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save TF-IDF Models",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"quora\",\n  \"save_path\": \"/path/to/save/models\"\n}"
+            },
+            "url": {
+              "raw": "{{text_processor_url}}/tfidf/save",
+              "host": ["{{text_processor_url}}"],
+              "path": ["tfidf", "save"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Antique Embedding Service (Port 5002)",
+      "item": [
+        {
+          "name": "Antique Embedding Service Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/",
+              "host": ["{{antique_embedding_url}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/health",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What are the benefits of using antique items?\",\n  \"top_k\": 10,\n  \"use_faiss\": true\n}"
+            },
+            "url": {
+              "raw": "{{antique_embedding_url}}/search",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["search"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/document/12345",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["document", "12345"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Service Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/stats",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["stats"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Service Information",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/info",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["info"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/cache/refresh",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["cache", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cache Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/cache/status",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["cache", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/cache/clear",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["cache", "clear"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cache Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/cache/stats",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["cache", "stats"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "FAISS Information",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/faiss/info",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["faiss", "info"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set FAISS Index",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{antique_embedding_url}}/faiss/set-index/IndexFlatIP",
+              "host": ["{{antique_embedding_url}}"],
+              "path": ["faiss", "set-index", "IndexFlatIP"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Antique Hybrid Service (Port 8006)",
+      "item": [
+        {
+          "name": "Hybrid Query Processing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What are the benefits of using antique items?\",\n  \"top_k\": 10\n}"
+            },
+            "url": {
+              "raw": "{{antique_hybrid_url}}/query",
+              "host": ["{{antique_hybrid_url}}"],
+              "path": ["query"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Antique RAG Service (Port 8002)",
+      "item": [
+        {
+          "name": "Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"How is the value of an antique item determined?\",\n  \"max_context_docs\": 5,\n  \"temperature\": 0.7,\n  \"max_length\": 512\n}"
+            },
+            "url": {
+              "raw": "{{antique_rag_url}}/chat",
+              "host": ["{{antique_rag_url}}"],
+              "path": ["chat"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_rag_url}}/health",
+              "host": ["{{antique_rag_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_rag_url}}/conversations/conversation_id",
+              "host": ["{{antique_rag_url}}"],
+              "path": ["conversations", "conversation_id"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{antique_rag_url}}/conversations/conversation_id",
+              "host": ["{{antique_rag_url}}"],
+              "path": ["conversations", "conversation_id"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Service Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{antique_rag_url}}/stats",
+              "host": ["{{antique_rag_url}}"],
+              "path": ["stats"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Quora RAG Service (Port 8001)",
+      "item": [
+        {
+          "name": "Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"How to improve writing skills?\",\n  \"max_context_docs\": 5,\n  \"temperature\": 0.7,\n  \"max_length\": 512\n}"
+            },
+            "url": {
+              "raw": "{{quora_rag_url}}/chat",
+              "host": ["{{quora_rag_url}}"],
+              "path": ["chat"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{quora_rag_url}}/health",
+              "host": ["{{quora_rag_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{quora_rag_url}}/conversations/conversation_id",
+              "host": ["{{quora_rag_url}}"],
+              "path": ["conversations", "conversation_id"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{quora_rag_url}}/conversations/conversation_id",
+              "host": ["{{quora_rag_url}}"],
+              "path": ["conversations", "conversation_id"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Service Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{quora_rag_url}}/stats",
+              "host": ["{{quora_rag_url}}"],
+              "path": ["stats"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Antique TF-IDF Service (Port 8009)",
+      "item": [
+        {
+          "name": "TF-IDF Query Processing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What are the benefits of using antique items?\",\n  \"top_k\": 10,\n  \"search_method\": \"tfidf\",\n  \"include_documents\": true,\n  \"use_expansion\": false\n}"
+            },
+            "url": {
+              "raw": "{{antique_tfidf_url}}/query",
+              "host": ["{{antique_tfidf_url}}"],
+              "path": ["query"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
